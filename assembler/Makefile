@@ -18,6 +18,7 @@ min: min.o
 
 test: min
 	./min; test $$? -eq 42 && echo ok
+	make compare
 
 .PHONY: compare
 compare: min.o my.o
