@@ -1,48 +1,76 @@
 package main
 
-import "os"
+import (
+	"os"
+	"unsafe"
+)
 
 // ELF format
 // see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
 // see https://man7.org/linux/man-pages/man5/elf.5.html
+// see https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h;h=4738dfa28f6549fc11654996a15659dc8007e686;hb=HEAD
 
-// The ELF header
-var magickNumber = []byte{
-	// 0x7F followed by ELF(45 4c 46) in ASCII;
-	0x7f,0x45,0x4c,0x46,
+// copied from libc's elf/elf.h
+//#define EI_NIDENT (16)
+//
+//typedef struct
+//{
+//	unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
+//	Elf64_Half	e_type;			/* Object file type */
+//	Elf64_Half	e_machine;		/* Architecture */
+//	Elf64_Word	e_version;		/* Object file version */
+//	Elf64_Addr	e_entry;		/* Entry point virtual address */
+//	Elf64_Off	e_phoff;		/* Program header table file offset */
+//	Elf64_Off	e_shoff;		/* Section header table file offset */
+//	Elf64_Word	e_flags;		/* Processor-specific flags */
+//	Elf64_Half	e_ehsize;		/* ELF header size in bytes */
+//	Elf64_Half	e_phentsize;		/* Program header table entry size */
+//	Elf64_Half	e_phnum;		/* Program header table entry count */
+//	Elf64_Half	e_shentsize;		/* Section header table entry size */
+//	Elf64_Half	e_shnum;		/* Section header table entry count */
+//	Elf64_Half	e_shstrndx;		/* Section header string table index */
+//} Elf64_Ehdr;
+
+type Elf64_Ehdr struct {
+	e_ident [16]uint8
+	e_type uint16
+	e_machine uint16 // 20
+	e_version uint32 // 24
+	e_entry uintptr // 32
+	e_phoff uintptr // 40
+	e_shoff uintptr // 48
+	e_flags uint32 // 52
+	e_ehsize uint16
+	e_phentsize uint16
+	e_phnum uint16
+	e_shentsize uint16
+	e_shnum uint16
+	e_shstrndx uint16 // 64
 }
 
-var EI_CLASS = []byte{0x02} //  1 or 2 to signify 32- or 64-bit format, respectively.
-
-var EI_DATA = []byte{0x01} // 1 or 2 to signify little or big endianness, respectively.
-var EI_VERSION = []byte{0x01} // 1 for the original and current version of ELF.
-
-var OtherELFHeader []byte = []byte{
-	0x00,                                     // EI_OSABI
-	0x00,                                     // EI_ABIVERSION
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // EI_PAD always zero.
-	0x01, 0x00, // e_type = ET_REL
-	0x3e, 0x00, // e_machine = AMD x86-64
-
-	0x01, 0x00, 0x00, 0x00, // e_version = 1
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // e_entry: null
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // e_phoff: null
-	0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // e_shoff: Points to the start of the section header table. f8=248
-	0x00, 0x00, 0x00, 0x00, // e_flags
-	0x40, 0x00, // e_ehsize: Contains the size of this header, normally 64 Bytes for 64-bit
-	0x00, 0x00, // e_phentsize: null
-	0x00, 0x00, // e_phnum: null
-	0x40, 0x00, // e_shentsize: Contains the size of a section header table entry.
-	0x07, 0x00, // e_shnum: Contains the number of entries in the section header table.
-	0x06, 0x00, // e_shstrndx: Contains index of the section header table entry that contains the section names.
-}
-
-var elfHeader [][]byte = [][]byte{
-	magickNumber,
-	EI_CLASS,
-	EI_DATA,
-	EI_VERSION,
-	OtherELFHeader,
+var elfHeader = Elf64_Ehdr{
+	e_ident: [16]uint8{
+		0x7f, 0x45, 0x4c, 0x46, // 0x7F followed by "ELF"(45 4c 46) in ASCII;
+		0x02,                                     // EI_CLASS:2=64-bit
+		0x01,                                     // EI_DATA:1=little endian
+		0x01,                                     // EI_VERSION:1=the original and current version of ELF.
+		0x00,                                     // EI_OSABI: 0=System V
+		0x00,                                     // EI_ABIVERSION:
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // EI_PAD: always zero.
+	},
+	e_type: 1, // ET_REL
+	e_machine: 0x3e, // AMD x86-64
+	e_version: 1,
+	e_entry:0,
+	e_phoff: 0,
+	e_shoff: 0xf8,//248
+	e_flags:0,
+	e_ehsize: 0x40,
+	e_phentsize:0,
+	e_phnum:0,
+	e_shentsize:0x40,
+	e_shnum: 0x07,
+	e_shstrndx: 0x06,
 }
 
 var text []byte = []byte{
@@ -186,8 +214,10 @@ var sectionHeaderTable = [][]byte{
 }
 
 func main() {
+	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
+	os.Stdout.Write(buf)
+
 	var sections [][]byte
-	sections = append(sections, elfHeader...)
 	sections = append(sections, body...)
 	sections = append(sections, sectionHeaderTable...)
 
