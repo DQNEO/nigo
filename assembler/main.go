@@ -64,14 +64,14 @@ var elfHeader = Elf64_Ehdr{
 	e_version: 1,
 	e_entry:0,
 	e_phoff: 0,
-	//e_shoff should be calculated dynamically
+	//e_shoff: 0, // calculated at runtime
 	e_flags:0,
 	e_ehsize: uint16(unsafe.Sizeof(_eh)),
 	e_phentsize:0,
 	e_phnum:0,
 	e_shentsize:0x40,
-	e_shnum: 0x07,
-	e_shstrndx: 0x06,
+	// e_shnum: 0, // calculated at runtime
+	// e_shstrndx: 0, // calculated at runtime
 }
 
 var text []byte = []byte{
@@ -217,6 +217,9 @@ var sectionHeaderTable = [][]byte{
 func main() {
 	var shoff = 0xf8
 	elfHeader.e_shoff = uintptr(shoff)
+	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
+	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
+
 	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
 	os.Stdout.Write(buf)
 
