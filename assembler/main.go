@@ -75,14 +75,21 @@ var elfHeader = Elf64_Ehdr{
 }
 
 // # Body
-var text []byte = []byte{
+var _text1 = []byte{
+	0x48, 0xc7, 0xc0, 0x2a, 0x00, 0x00,  0x00, 0xc3, // movq $0x2a, %rax
+}
+
+var _text2 []byte = []byte{
 	// .text section
-	// offset: 0x40, size=len(text)=>0x12
+	// offset: 0x40,
+	// size=len(text)=>0x12
 	0x48, 0xc7, 0xc0, 0x0b, 0x00, 0x00, 0x00, // movq $0xb, %rax
 	0x48, 0xc7, 0xc1, 0x1f, 0x00, 0x00, 0x00, // movq $0x1f, %rcx
 	0x48, 0x01, 0xc8,                         // addq %rcx, %rax
 	0xc3, // retq
 }
+
+var text = _text2
 
 var symtab = []byte{
 	//  SHT_SYMTAB (symbol table)
@@ -196,9 +203,10 @@ var hts6 *SectionHeaderTableEntry = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
+var textAlign = []byte{0,0,0,0,0,0}
 var body [][]byte = [][]byte{
 	text,
-	[]byte{0,0,0,0,0,0},
+	textAlign,
 	symtab,
 	strtab1,
 	strtabSectionNames,
@@ -216,7 +224,8 @@ func setOffsetsOfSectionHeaderTable() {
 	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
 
 	hts3.sh_offst = hts2.sh_offst
-	hts4.sh_offst = hts3.sh_offst + 6 // 6 is what ?
+	var align = uintptr(len(textAlign)) // or 6
+	hts4.sh_offst = hts3.sh_offst + align // 6 is what ?
 	hts4.sh_size = uintptr(len(symtab))
 	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
 	hts5.sh_size = uintptr(len(strtab1))
