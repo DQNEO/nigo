@@ -145,6 +145,8 @@ var ht0 = &SectionHeaderEntry{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sh_entsize:Contains the size, in bytes, of each entry, for sections that contain fixed-size entries. Otherwise, this field contains zero.
 }
 
+var hts0 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht0))
+
 var ht1 = &SectionHeaderEntry{
 	// ## section header of .text
 	0x1b,0x00,0x00,0x00, // sh_name
@@ -249,8 +251,8 @@ var body [][]byte = [][]byte{
 	strtabSectionNames,
 }
 
-var sectionHeaderTable = []*SectionHeaderEntry{
-	ht0,ht1,ht2,ht3,ht4,ht5,ht6,
+var sectionHeaderTable = []*SectionHeaderEntryS{
+	hts0,hts1,hts2,hts3,hts4,hts5,hts6,
 }
 
 const offset_offset = 24
@@ -284,6 +286,8 @@ func main() {
 	}
 
 	for _, entry := range sectionHeaderTable {
-		os.Stdout.Write(entry[:])
+		entryS := (*SectionHeaderEntryS)(unsafe.Pointer(entry))
+		var buf []byte = ((*[unsafe.Sizeof(*entryS)]byte)(unsafe.Pointer(entryS)))[:]
+		os.Stdout.Write(buf)
 	}
 }
