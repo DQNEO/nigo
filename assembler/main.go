@@ -172,28 +172,21 @@ var ht6 = []byte{ //  this is what e_shstrndx points to
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
+var body [][]byte = [][]byte{
+	text,
+	symtab,
+	strtab1,
+	strtabSectionNames,
+}
 var sectionHeaderTable = [][]byte{
 	ht0,ht1,ht2,ht3,ht4,ht5,ht6,
 }
 
 func main() {
 	var sections [][]byte
-	for _, h := range elfHeader {
-		sections = append(sections, h)
-	}
-	var body [][]byte = [][]byte{
-		text,
-		symtab,
-		strtab1,
-		strtabSectionNames,
-	}
-
-	for _, s := range body {
-		sections = append(sections, s)
-	}
-	for _, ht := range sectionHeaderTable {
-		sections = append(sections, ht)
-	}
+	sections = append(sections, elfHeader...)
+	sections = append(sections, body...)
+	sections = append(sections, sectionHeaderTable...)
 
 	for _, buf := range sections {
 		os.Stdout.Write(buf)
