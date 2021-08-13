@@ -69,7 +69,7 @@ var elfHeader = Elf64_Ehdr{
 	e_ehsize: uint16(unsafe.Sizeof(_eh)),
 	e_phentsize:0,
 	e_phnum:0,
-	e_shentsize:0x40,
+	e_shentsize:uint16(unsafe.Sizeof(*hts0)), // 64
 	// e_shnum: 0, // calculated at runtime
 	// e_shstrndx: 0, // calculated at runtime
 }
