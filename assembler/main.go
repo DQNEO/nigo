@@ -224,10 +224,19 @@ func setOffsetsOfSectionHeaderTable() {
 	hts6.sh_size = uintptr(len(strtabSectionNames))
 }
 
+func calcSectionHeaderOffset() uintptr {
+	ehLen :=  elfHeader.e_ehsize
+	var bodyLen int
+	for _, buf := range body {
+		bodyLen += len(buf)
+	}
+
+	return uintptr(ehLen) + uintptr(bodyLen)
+}
+
 func main() {
 	setOffsetsOfSectionHeaderTable()
-	var shoff = 0x108 // 264
-	elfHeader.e_shoff = uintptr(shoff)
+	elfHeader.e_shoff = uintptr(calcSectionHeaderOffset())
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
