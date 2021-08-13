@@ -64,7 +64,7 @@ var elfHeader = Elf64_Ehdr{
 	e_version: 1,
 	e_entry:0,
 	e_phoff: 0,
-	e_shoff: 0xf8,//248
+	//e_shoff should be calculated dynamically
 	e_flags:0,
 	e_ehsize: uint16(unsafe.Sizeof(_eh)),
 	e_phentsize:0,
@@ -215,6 +215,8 @@ var sectionHeaderTable = [][]byte{
 }
 
 func main() {
+	var shoff = 0xf8
+	elfHeader.e_shoff = uintptr(shoff)
 	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
 	os.Stdout.Write(buf)
 
