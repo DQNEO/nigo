@@ -74,8 +74,6 @@ var elfHeader = Elf64_Ehdr{
 	// e_shstrndx: 0, // calculated at runtime
 }
 
-const shentsize = 0x40
-
 // # Body
 var text []byte = []byte{
 	// .text section
@@ -211,8 +209,6 @@ var sectionHeaderTable = []*SectionHeaderTableEntry{
 	hts0,hts1,hts2,hts3,hts4,hts5,hts6,
 }
 
-const offset_offset = 24
-const size_offset = offset_offset + 8
 func setOffsetsOfSectionHeaderTable() {
 
 	hts1.sh_offst = 0x40
