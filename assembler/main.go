@@ -188,8 +188,11 @@ func main() {
 	sections = append(sections, body...)
 	sections = append(sections, sectionHeaderTable...)
 
+	write(sections)
+}
+
+func write(sections [][]byte) {
 	for _, buf := range sections {
 		os.Stdout.Write(buf)
 	}
-
 }
