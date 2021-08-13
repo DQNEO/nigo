@@ -48,6 +48,7 @@ type Elf64_Ehdr struct {
 	e_shstrndx uint16 // 64
 }
 
+var _eh Elf64_Ehdr
 var elfHeader = Elf64_Ehdr{
 	e_ident: [16]uint8{
 		0x7f, 0x45, 0x4c, 0x46, // 0x7F followed by "ELF"(45 4c 46) in ASCII;
@@ -65,7 +66,7 @@ var elfHeader = Elf64_Ehdr{
 	e_phoff: 0,
 	e_shoff: 0xf8,//248
 	e_flags:0,
-	e_ehsize: 0x40,
+	e_ehsize: uint16(unsafe.Sizeof(_eh)),
 	e_phentsize:0,
 	e_phnum:0,
 	e_shentsize:0x40,
