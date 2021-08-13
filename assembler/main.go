@@ -236,7 +236,7 @@ func calcSectionHeaderOffset() uintptr {
 
 func main() {
 	setOffsetsOfSectionHeaderTable()
-	elfHeader.e_shoff = uintptr(calcSectionHeaderOffset())
+	elfHeader.e_shoff = calcSectionHeaderOffset()
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
