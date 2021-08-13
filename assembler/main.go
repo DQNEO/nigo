@@ -177,14 +177,26 @@ var sectionHeaderTable = [][]byte{
 }
 
 func main() {
+	var sections [][]byte
 	for _, h := range elfHeader {
-		os.Stdout.Write(h)
+		sections = append(sections, h)
 	}
-	os.Stdout.Write(text)
-	os.Stdout.Write(symtab)
-	os.Stdout.Write(strtab1)
-	os.Stdout.Write(strtabSectionNames)
+	var body [][]byte = [][]byte{
+		text,
+		symtab,
+		strtab1,
+		strtabSectionNames,
+	}
+
+	for _, s := range body {
+		sections = append(sections, s)
+	}
 	for _, ht := range sectionHeaderTable {
-		os.Stdout.Write(ht)
+		sections = append(sections, ht)
 	}
+
+	for _, buf := range sections {
+		os.Stdout.Write(buf)
+	}
+
 }
