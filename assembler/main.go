@@ -116,7 +116,22 @@ var strtabSectionNames = []byte{
 }
 
 // # Section header table (64 * 7)
-var ht0 = &[shentsize]byte{
+type SectionHeaderEntry [shentsize]byte
+
+type SectionHeaderEntryS struct {
+	sh_name uint32 // 4
+	sh_type uint32  // 8
+	sh_flag uintptr // 16
+	sh_addr uintptr // 24
+	sh_offst uintptr // 32
+	sh_size uintptr // 40
+	sh_link uint32 // 44
+	sh_info uint32 // 48
+	sh_addralign uintptr // 56
+	sh_entsize uintptr // 64
+}
+
+var ht0 = &SectionHeaderEntry{
 	// ## section SHT_NULL
 	0x00, 0x00, 0x00, 0x00, // sh_name: An offset to a string in the .shstrtab section that represents the name of this section.
 	0x00, 0x00, 0x00, 0x00, // sh_type: Identifies the type of this header.
@@ -130,7 +145,7 @@ var ht0 = &[shentsize]byte{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sh_entsize:Contains the size, in bytes, of each entry, for sections that contain fixed-size entries. Otherwise, this field contains zero.
 }
 
-var ht1 = &[shentsize]byte{
+var ht1 = &SectionHeaderEntry{
 	// ## section header of .text
 	0x1b,0x00,0x00,0x00, // sh_name
 	0x01,0x00,0x00,0x00, // sh_type: SHT_PROGBITS
@@ -144,7 +159,9 @@ var ht1 = &[shentsize]byte{
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht2 = &[shentsize]byte{
+var hts1 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht1))
+
+var ht2 = &SectionHeaderEntry{
 	// ## section header: none
 	0x21,0x00,0x00,0x00, // sh_name
 	0x01,0x00,0x00,0x00, // sh_type: SHT_PROGBITS
@@ -157,9 +174,10 @@ var ht2 = &[shentsize]byte{
 	0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_addralign
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
+var hts2 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht2))
 
 
-var ht3 = &[shentsize]byte{
+var ht3 = &SectionHeaderEntry{
 	// ## section header of bss
 	0x27,0x00,0x00,0x00, // sh_name
 	0x08,0x00,0x00,0x00, // sh_type:  SHT_NOBITS (bss)
@@ -173,7 +191,9 @@ var ht3 = &[shentsize]byte{
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht4 = &[shentsize]byte{
+var hts3 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht3))
+
+var ht4 = &SectionHeaderEntry{
 	// ## section header of SYMTAB
 	0x01,0x00,0x00,0x00, // sh_name
 	0x02,0x00,0x00,0x00, // sh_type:  SHT_SYMTAB
@@ -187,7 +207,9 @@ var ht4 = &[shentsize]byte{
 	0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht5 = &[shentsize]byte{
+var hts4 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht4))
+
+var ht5 = &SectionHeaderEntry{
 	// ## section
 	0x09,0x00,0x00,0x00, // sh_name
 	0x03,0x00,0x00,0x00, // sh_type: SHT_STRTAB
@@ -200,7 +222,10 @@ var ht5 = &[shentsize]byte{
 	0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_addralign
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
-var ht6 = &[shentsize]byte{ //  this is what e_shstrndx points to
+
+var hts5 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht5))
+
+var ht6 = &SectionHeaderEntry{ //  this is what e_shstrndx points to
 	// ## section
 	0x11,0x00,0x00,0x00, // sh_name
 	0x03,0x00,0x00,0x00, // sh_type:  SHT_STRTAB
@@ -214,6 +239,8 @@ var ht6 = &[shentsize]byte{ //  this is what e_shstrndx points to
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
+var hts6 *SectionHeaderEntryS = (*SectionHeaderEntryS)(unsafe.Pointer(ht6))
+
 var body [][]byte = [][]byte{
 	text,
 	[]byte{0,0,0,0,0,0},
@@ -222,22 +249,24 @@ var body [][]byte = [][]byte{
 	strtabSectionNames,
 }
 
-var sectionHeaderTable = []*[shentsize]byte{
+var sectionHeaderTable = []*SectionHeaderEntry{
 	ht0,ht1,ht2,ht3,ht4,ht5,ht6,
 }
 
 const offset_offset = 24
 const size_offset = offset_offset + 8
 func setOffsetsOfSectionHeaderTable() {
-	ht1[offset_offset] = 0x40
-	ht1[size_offset] = uint8(len(text))
-	ht2[offset_offset] = ht1[offset_offset] + uint8(len(text))
-	ht3[offset_offset] = ht2[offset_offset]
-	ht4[offset_offset] = ht3[offset_offset] + 6 // ?
-	ht4[size_offset] = uint8(len(symtab))
-	ht5[offset_offset] = ht4[offset_offset] + ht4[size_offset]
-	ht5[size_offset] = uint8(len(strtab1))
-	ht6[offset_offset] = ht5[offset_offset] + ht5[size_offset]
+
+	hts1.sh_offst = 0x40
+	hts1.sh_size = uintptr(len(text))
+	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
+
+	hts3.sh_offst = hts2.sh_offst
+	hts4.sh_offst = hts3.sh_offst + 6 // 6 is what ?
+	hts4.sh_size = uintptr(len(symtab))
+	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
+	hts5.sh_size = uintptr(len(strtab1))
+	hts6.sh_offst = hts5.sh_offst + hts5.sh_size
 }
 
 func main() {
