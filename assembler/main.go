@@ -115,10 +115,6 @@ var strtabSectionNames = []byte{
 	0x00,
 }
 
-var zeropad = []byte{
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-}
-
 type SectionHeaderTableEntry struct {
 	sh_name uint32 // 4
 	sh_type uint32  // 8
@@ -208,7 +204,7 @@ var body [][]byte = [][]byte{
 	symtab,
 	strtab1,
 	strtabSectionNames,
-	zeropad,
+	[]byte{0,0,0,0,0,0},
 }
 
 var sectionHeaderTable = []*SectionHeaderTableEntry{
