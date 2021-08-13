@@ -10,3 +10,7 @@ min: min.o
 
 test: min
 	./min; test $$? -eq 42 && echo ok
+
+.PHONY: clean
+clean:
+	rm *.o min
