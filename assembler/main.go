@@ -74,6 +74,8 @@ var elfHeader = Elf64_Ehdr{
 	// e_shstrndx: 0, // calculated at runtime
 }
 
+const shentsize = 0x40
+
 // # Body
 var text []byte = []byte{
 	// .text section
@@ -114,7 +116,7 @@ var strtabSectionNames = []byte{
 }
 
 // # Section header table (64 * 7)
-var ht0 = []byte{
+var ht0 = &[shentsize]byte{
 	// ## section SHT_NULL
 	0x00, 0x00, 0x00, 0x00, // sh_name: An offset to a string in the .shstrtab section that represents the name of this section.
 	0x00, 0x00, 0x00, 0x00, // sh_type: Identifies the type of this header.
@@ -128,7 +130,7 @@ var ht0 = []byte{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sh_entsize:Contains the size, in bytes, of each entry, for sections that contain fixed-size entries. Otherwise, this field contains zero.
 }
 
-var ht1 = []byte{
+var ht1 = &[shentsize]byte{
 	// ## section header of .text
 	0x1b,0x00,0x00,0x00, // sh_name
 	0x01,0x00,0x00,0x00, // sh_type: SHT_PROGBITS
@@ -142,7 +144,7 @@ var ht1 = []byte{
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht2 = []byte{
+var ht2 = &[shentsize]byte{
 	// ## section header: none
 	0x21,0x00,0x00,0x00, // sh_name
 	0x01,0x00,0x00,0x00, // sh_type: SHT_PROGBITS
@@ -157,7 +159,7 @@ var ht2 = []byte{
 }
 
 
-var ht3 = []byte{
+var ht3 = &[shentsize]byte{
 	// ## section header of bss
 	0x27,0x00,0x00,0x00, // sh_name
 	0x08,0x00,0x00,0x00, // sh_type:  SHT_NOBITS (bss)
@@ -171,7 +173,7 @@ var ht3 = []byte{
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht4 = []byte{
+var ht4 = &[shentsize]byte{
 	// ## section header of SYMTAB
 	0x01,0x00,0x00,0x00, // sh_name
 	0x02,0x00,0x00,0x00, // sh_type:  SHT_SYMTAB
@@ -185,7 +187,7 @@ var ht4 = []byte{
 	0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
 
-var ht5 = []byte{
+var ht5 = &[shentsize]byte{
 	// ## section
 	0x09,0x00,0x00,0x00, // sh_name
 	0x03,0x00,0x00,0x00, // sh_type: SHT_STRTAB
@@ -198,7 +200,7 @@ var ht5 = []byte{
 	0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_addralign
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // sh_entsize
 }
-var ht6 = []byte{ //  this is what e_shstrndx points to
+var ht6 = &[shentsize]byte{ //  this is what e_shstrndx points to
 	// ## section
 	0x11,0x00,0x00,0x00, // sh_name
 	0x03,0x00,0x00,0x00, // sh_type:  SHT_STRTAB
@@ -219,7 +221,8 @@ var body [][]byte = [][]byte{
 	strtab1,
 	strtabSectionNames,
 }
-var sectionHeaderTable = [][]byte{
+
+var sectionHeaderTable = []*[shentsize]byte{
 	ht0,ht1,ht2,ht3,ht4,ht5,ht6,
 }
 
@@ -247,15 +250,11 @@ func main() {
 	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
 	os.Stdout.Write(buf)
 
-	var sections [][]byte
-	sections = append(sections, body...)
-	sections = append(sections, sectionHeaderTable...)
-
-	write(sections)
-}
-
-func write(sections [][]byte) {
-	for _, buf := range sections {
+	for _, buf := range body {
 		os.Stdout.Write(buf)
+	}
+
+	for _, entry := range sectionHeaderTable {
+		os.Stdout.Write(entry[:])
 	}
 }
