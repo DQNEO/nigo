@@ -70,7 +70,7 @@ var elfHeader = Elf64_Ehdr{
 	e_ehsize: uint16(ELFHeaderSize),
 	e_phentsize:0,
 	e_phnum:0,
-	e_shentsize:uint16(unsafe.Sizeof(*hts0)), // 64
+	e_shentsize:uint16(unsafe.Sizeof(*sh0)), // 64
 	// e_shnum: 0, // calculated at runtime
 	// e_shstrndx: 0, // calculated at runtime
 }
@@ -121,7 +121,7 @@ var strtabSectionNames = []byte{
 	0x00,
 }
 
-type SectionHeaderTableEntry struct {
+type sectionHeader struct {
 	sh_name uint32 // 4
 	sh_type uint32  // 8
 	sh_flag uintptr // 16
@@ -134,10 +134,10 @@ type SectionHeaderTableEntry struct {
 	sh_entsize uintptr // 64
 }
 
-var hts0 = &SectionHeaderTableEntry{
+var sh0 = &sectionHeader{
 }
 
-var hts1 = &SectionHeaderTableEntry{
+var sh1 = &sectionHeader{
 	sh_name:      0x1b, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flag:      0x06, // SHF_ALLOC|SHF_EXECINSTR
@@ -148,7 +148,7 @@ var hts1 = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
-var hts2 = &SectionHeaderTableEntry{
+var sh2 = &sectionHeader{
 	sh_name:      0x21, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
@@ -159,7 +159,7 @@ var hts2 = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
-var hts3 = &SectionHeaderTableEntry{
+var sh3 = &sectionHeader{
 	sh_name:      0x27, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
@@ -170,7 +170,7 @@ var hts3 = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
-var hts4 = &SectionHeaderTableEntry{
+var sh4 = &sectionHeader{
 	sh_name:      0x01, // ".symtab"
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flag:      0,
@@ -181,7 +181,7 @@ var hts4 = &SectionHeaderTableEntry{
 	sh_entsize:   0x18,
 }
 
-var hts5 = &SectionHeaderTableEntry{
+var sh5 = &sectionHeader{
 	sh_name:      0x09, // ".strtab"
 	sh_type:      0x03,
 	sh_flag:      0,
@@ -193,7 +193,7 @@ var hts5 = &SectionHeaderTableEntry{
 }
 
 //  this is what e_shstrndx points to
-var hts6 *SectionHeaderTableEntry = &SectionHeaderTableEntry{
+var sh6 *sectionHeader = &sectionHeader{
 	sh_name:      0x11, // ".shstrtab"
 	sh_type:      0x03, // SHT_STRTAB
 	sh_flag:      0,
@@ -204,30 +204,30 @@ var hts6 *SectionHeaderTableEntry = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
-var sectionHeaderTable = []*SectionHeaderTableEntry{
-	hts0,hts1,hts2,hts3,hts4,hts5,hts6,
+var sectionHeaderTable = []*sectionHeader{
+	sh0,sh1, sh2, sh3, sh4, sh5, sh6,
 }
 
 func main() {
-	hts1.sh_offst = ELFHeaderSize
-	hts1.sh_size = uintptr(len(text))
+	sh1.sh_offst = ELFHeaderSize
+	sh1.sh_size = uintptr(len(text))
 
-	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
+	sh2.sh_offst = sh1.sh_offst + sh1.sh_size
 
-	hts3.sh_offst = hts2.sh_offst + hts2.sh_size
+	sh3.sh_offst = sh2.sh_offst + sh2.sh_size
 
-	_offset := hts3.sh_offst + hts3.sh_size
-	var align  = hts4.sh_addralign
+	_offset := sh3.sh_offst + sh3.sh_size
+	var align  = sh4.sh_addralign
 	zeroPad := align - (_offset % align)
 	symtabZeroPad := zeroPad
-	hts4.sh_offst = _offset + zeroPad
-	hts4.sh_size = uintptr(len(symtab))
-	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
-	hts5.sh_size = uintptr(len(strtab1))
-	hts6.sh_offst = hts5.sh_offst + hts5.sh_size
-	hts6.sh_size = uintptr(len(strtabSectionNames))
+	sh4.sh_offst = _offset + zeroPad
+	sh4.sh_size = uintptr(len(symtab))
+	sh5.sh_offst = sh4.sh_offst + sh4.sh_size
+	sh5.sh_size = uintptr(len(strtab1))
+	sh6.sh_offst = sh5.sh_offst + sh5.sh_size
+	sh6.sh_size = uintptr(len(strtabSectionNames))
 
-	shoff := (hts6.sh_offst + hts6.sh_size)
+	shoff := (sh6.sh_offst + sh6.sh_size)
 	// shoff should be bytes of 8 * x
 	mod := shoff % 8
 	paddingBeforeSectionHeaderTable := 8 - mod
