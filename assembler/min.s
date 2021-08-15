@@ -6,3 +6,4 @@ main:
   movq $0x1f, %rcx
   addq %rcx, %rax
   retq
+  retq
