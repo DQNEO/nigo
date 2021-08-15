@@ -178,14 +178,11 @@ var symbolTable = []*symbolTableEntry{
 	},
 }
 
-var sc5 = []byte{
-	// SHT_STRTAB
-	// size: 0x06
-	0x00,
-	0x6d, 0x79, 0x66, 0x75, 0x6e, 0x63, 0x00, // myfunc\0
-	0x6d, 0x79, 0x66, 0x75, 0x6e, 0x63, 0x32, 0x00, // myfunc2\0
-	0x6d, 0x61, 0x69, 0x6e, // main
-	0x00,
+// contents of ".strtab"
+var symbolNames = []string{
+	"myfunc",
+	"myfunc2",
+	"main",
 }
 
 var sc6 = []byte{
@@ -313,9 +310,10 @@ var s4 = &section{
 	contents: nil,
 }
 
+
 var sh5 = &sectionHeader{
 	sh_name:      0x09, // ".strtab"
-	sh_type:      0x03,
+	sh_type:      0x03, // SHT_STRTAB
 	sh_flag:      0,
 	sh_addr:      0,
 	sh_link:      0,
@@ -324,9 +322,16 @@ var sh5 = &sectionHeader{
 	sh_entsize:   0,
 }
 
+// Section 5: .strtab
+//   This section holds strings, most commonly the strings that
+//              represent the names associated with symbol table entries.
+//              If the file has a loadable segment that includes the
+//              symbol string table, the section's attributes will include
+//              the SHF_ALLOC bit.  Otherwise, the bit will be off.  This
+//              section is of type SHT_STRTAB.
 var s5 = &section{
 	header: sh5,
-	contents: sc5,
+	contents: nil,
 }
 
 //  this is what e_shstrndx points to
@@ -374,8 +379,18 @@ func makeSymbolTable() {
 	}
 }
 
+func makeStrTab() {
+	var data []byte = []byte{0x00}
+	for _, name := range symbolNames {
+		buf := append([]byte(name), 0x00)
+		data = append(data, buf...)
+	}
+	s5.contents = data
+}
+
 func main() {
 	makeSymbolTable()
+	makeStrTab()
 	// Calculates offset and zero padding
 	sh1.sh_offst = ELFHeaderSize
 	sh1.sh_size = uintptr(len(s1.contents))
