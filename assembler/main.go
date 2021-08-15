@@ -90,7 +90,7 @@ var _text2 []byte = []byte{
 	0xc3, // retq
 }
 
-var sc1 []byte = _text2
+var sc1 []byte = _text1
 
 var sc4 = []byte{
 	//  SHT_SYMTAB (symbol table)
@@ -277,7 +277,12 @@ func calcOffsetOfSection(s *section, prev *section) {
 	if align == 0 || align == 1 {
 		s.numZeroPad = 0
 	} else {
-		s.numZeroPad = align - (tentative_offset % align)
+		mod := tentative_offset % align
+		if mod == 0 {
+			s.numZeroPad = 0
+		} else {
+			s.numZeroPad = align - mod
+		}
 	}
 	s.header.sh_offst = tentative_offset + s.numZeroPad
 	s.header.sh_size = uintptr(len(s.contents))
@@ -286,20 +291,19 @@ func calcOffsetOfSection(s *section, prev *section) {
 func main() {
 	// Calculates offset and zero padding
 	sh1.sh_offst = ELFHeaderSize
-	sh1.sh_size = uintptr(len(sc1))
+	sh1.sh_size = uintptr(len(s1.contents))
 
 	calcOffsetOfSection(s2, s1)
 	calcOffsetOfSection(s3, s2)
 	calcOffsetOfSection(s4, s3)
 	calcOffsetOfSection(s5, s4)
 	calcOffsetOfSection(s6, s5)
-
 	shoff := (sh6.sh_offst + sh6.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
 	paddingBeforeSectionHeaderTable := 8 - mod
-	shoff += paddingBeforeSectionHeaderTable
-	elfHeader.e_shoff = shoff
+	e_shoff := shoff + paddingBeforeSectionHeaderTable
+	elfHeader.e_shoff = e_shoff
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
