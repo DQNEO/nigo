@@ -295,7 +295,7 @@ func main() {
 	calcOffsetOfSection(s6, s5)
 
 	shoff := (sh6.sh_offst + sh6.sh_size)
-	// shoff should be bytes of 8 * x
+	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
 	paddingBeforeSectionHeaderTable := 8 - mod
 	shoff += paddingBeforeSectionHeaderTable
