@@ -48,7 +48,8 @@ type Elf64_Ehdr struct {
 	e_shstrndx uint16 // 64
 }
 
-var _eh Elf64_Ehdr
+const ELFHeaderSize = unsafe.Sizeof(Elf64_Ehdr{})
+
 var elfHeader = Elf64_Ehdr{
 	e_ident: [16]uint8{
 		0x7f, 0x45, 0x4c, 0x46, // 0x7F followed by "ELF"(45 4c 46) in ASCII;
@@ -66,7 +67,7 @@ var elfHeader = Elf64_Ehdr{
 	e_phoff: 0,
 	//e_shoff: 0, // calculated at runtime
 	e_flags:0,
-	e_ehsize: uint16(unsafe.Sizeof(_eh)),
+	e_ehsize: uint16(ELFHeaderSize),
 	e_phentsize:0,
 	e_phnum:0,
 	e_shentsize:uint16(unsafe.Sizeof(*hts0)), // 64
@@ -206,20 +207,19 @@ var hts6 *SectionHeaderTableEntry = &SectionHeaderTableEntry{
 var sectionHeaderTable = []*SectionHeaderTableEntry{
 	hts0,hts1,hts2,hts3,hts4,hts5,hts6,
 }
-var  symtabZeroPad uintptr
 
 func main() {
-	var paddingBeforeSectionHeaderTable uintptr
-
-	hts1.sh_offst = 0x40
+	hts1.sh_offst = ELFHeaderSize
 	hts1.sh_size = uintptr(len(text))
+
 	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
-	hts3.sh_offst = hts2.sh_offst
+
+	hts3.sh_offst = hts2.sh_offst + hts2.sh_size
 
 	_offset := hts3.sh_offst + hts3.sh_size
 	var align  = hts4.sh_addralign
 	zeroPad := align - (_offset % align)
-	symtabZeroPad = zeroPad
+	symtabZeroPad := zeroPad
 	hts4.sh_offst = _offset + zeroPad
 	hts4.sh_size = uintptr(len(symtab))
 	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
@@ -227,20 +227,12 @@ func main() {
 	hts6.sh_offst = hts5.sh_offst + hts5.sh_size
 	hts6.sh_size = uintptr(len(strtabSectionNames))
 
-	ehLen :=  elfHeader.e_ehsize
-	var bodyLen int
-	bodyLen += len(text)
-	bodyLen += int(symtabZeroPad) + len(symtab)
-	bodyLen += len(strtab1)
-	bodyLen += len(strtabSectionNames)
-	total := uintptr(ehLen) + uintptr(bodyLen)
-	// total should be  bytes of 8 * x
-	mod := total % 8
-	padding := 8 - mod
-	total += padding
-	eshoff, paddingToshoff := total, padding
-
-	elfHeader.e_shoff, paddingBeforeSectionHeaderTable = eshoff, paddingToshoff
+	shoff := (hts6.sh_offst + hts6.sh_size)
+	// shoff should be bytes of 8 * x
+	mod := shoff % 8
+	paddingBeforeSectionHeaderTable := 8 - mod
+	shoff += paddingBeforeSectionHeaderTable
+	elfHeader.e_shoff = shoff
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
