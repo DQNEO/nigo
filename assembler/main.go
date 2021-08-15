@@ -298,10 +298,14 @@ func main() {
 	calcOffsetOfSection(s4, s3)
 	calcOffsetOfSection(s5, s4)
 	calcOffsetOfSection(s6, s5)
+
 	shoff := (sh6.sh_offst + sh6.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
-	paddingBeforeSectionHeaderTable := 8 - mod
+	var paddingBeforeSectionHeaderTable uintptr
+	if mod != 0 {
+		paddingBeforeSectionHeaderTable = 8 - mod
+	}
 	e_shoff := shoff + paddingBeforeSectionHeaderTable
 	elfHeader.e_shoff = e_shoff
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
