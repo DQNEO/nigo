@@ -210,7 +210,6 @@ var body [][]byte = [][]byte{
 	symtab,
 	strtab1,
 	strtabSectionNames,
-	[]byte{0,0,0,0,0,0},
 }
 
 var sectionHeaderTable = []*SectionHeaderTableEntry{
@@ -224,8 +223,8 @@ func setOffsetsOfSectionHeaderTable() {
 	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
 
 	hts3.sh_offst = hts2.sh_offst
-	var align = uintptr(len(textAlign)) // or 6
-	hts4.sh_offst = hts3.sh_offst + align // 6 is what ?
+	var align = uintptr(len(textAlign))
+	hts4.sh_offst = hts3.sh_offst + align
 	hts4.sh_size = uintptr(len(symtab))
 	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
 	hts5.sh_size = uintptr(len(strtab1))
@@ -233,19 +232,27 @@ func setOffsetsOfSectionHeaderTable() {
 	hts6.sh_size = uintptr(len(strtabSectionNames))
 }
 
-func calcSectionHeaderOffset() uintptr {
+func calcSectionHeaderOffset() (uintptr, uintptr) {
 	ehLen :=  elfHeader.e_ehsize
 	var bodyLen int
 	for _, buf := range body {
 		bodyLen += len(buf)
 	}
 
-	return uintptr(ehLen) + uintptr(bodyLen)
+	total := uintptr(ehLen) + uintptr(bodyLen)
+
+	// total should be  bytes of 8 * x
+	mod := total % 8
+	padding := 8 - mod
+	total += padding
+	return total, padding
 }
+
 
 func main() {
 	setOffsetsOfSectionHeaderTable()
-	elfHeader.e_shoff = calcSectionHeaderOffset()
+	var paddingBeforeSectionHeaderTable uintptr
+	elfHeader.e_shoff, paddingBeforeSectionHeaderTable = calcSectionHeaderOffset()
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
@@ -254,6 +261,10 @@ func main() {
 
 	for _, buf := range body {
 		os.Stdout.Write(buf)
+	}
+
+	for i:=0;i< int(paddingBeforeSectionHeaderTable);i++ {
+		os.Stdout.Write([]byte{0})
 	}
 
 	for _, entryS := range sectionHeaderTable {
