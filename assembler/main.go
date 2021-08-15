@@ -121,6 +121,20 @@ var sc6 = []byte{
 	0x00,
 }
 
+// https://man7.org/linux/man-pages/man5/elf.5.html
+//   typedef struct {
+//               uint32_t   sh_name;
+//               uint32_t   sh_type;
+//               uint64_t   sh_flags;
+//               Elf64_Addr sh_addr;
+//               Elf64_Off  sh_offset;
+//               uint64_t   sh_size;
+//               uint32_t   sh_link;
+//               uint32_t   sh_info;
+//               uint64_t   sh_addralign;
+//               uint64_t   sh_entsize;
+//           } Elf64_Shdr;
+
 type sectionHeader struct {
 	sh_name uint32 // 4
 	sh_type uint32  // 8
@@ -130,11 +144,30 @@ type sectionHeader struct {
 	sh_size uintptr // 40
 	sh_link uint32 // 44
 	sh_info uint32 // 48
+
+	// Some sections have address alignment constraints.  If a
+	// section holds a doubleword, the system must ensure
+	// doubleword alignment for the entire section.  That is, the
+	// value of sh_addr must be congruent to zero, modulo the
+	// value of sh_addralign.  Only zero and positive integral
+	// powers of two are allowed.  The value 0 or 1 means that
+	// the section has no alignment constraints.
 	sh_addralign uintptr // 56
 	sh_entsize uintptr // 64
 }
 
+type section struct {
+	header *sectionHeader
+	numZeroPad uintptr
+	contents []uint8
+}
+
 var sh0 = &sectionHeader{
+}
+
+var s0 = &section{
+	header:     sh0,
+	contents:   nil,
 }
 
 var sh1 = &sectionHeader{
@@ -148,7 +181,10 @@ var sh1 = &sectionHeader{
 	sh_entsize:   0,
 }
 
-var sz1 uintptr
+var s1 = &section{
+	header: sh1,
+	contents: sc1,
+}
 
 var sh2 = &sectionHeader{
 	sh_name:      0x21, // ".data"
@@ -160,7 +196,11 @@ var sh2 = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-var sz2 uintptr
+
+var s2 = &section{
+	header: sh2,
+	contents: nil,
+}
 
 var sh3 = &sectionHeader{
 	sh_name:      0x27, // ".bss"
@@ -172,7 +212,11 @@ var sh3 = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-var sz3 uintptr
+
+var s3 = &section{
+	header: sh3,
+	contents: nil,
+}
 
 var sh4 = &sectionHeader{
 	sh_name:      0x01, // ".symtab"
@@ -184,7 +228,11 @@ var sh4 = &sectionHeader{
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
-var sz4 uintptr
+
+var s4 = &section{
+	header: sh4,
+	contents: sc4,
+}
 
 var sh5 = &sectionHeader{
 	sh_name:      0x09, // ".strtab"
@@ -196,7 +244,12 @@ var sh5 = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-var sz5 uintptr
+
+var s5 = &section{
+	header: sh5,
+	contents: sc5,
+}
+
 //  this is what e_shstrndx points to
 var sh6 *sectionHeader = &sectionHeader{
 	sh_name:      0x11, // ".shstrtab"
@@ -208,13 +261,18 @@ var sh6 *sectionHeader = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-var sz6 uintptr
+
+var s6 = &section{
+	header: sh6,
+	contents: sc6,
+}
 
 var sectionHeaderTable = []*sectionHeader{
 	sh0,sh1, sh2, sh3, sh4, sh5, sh6,
 }
 
 func main() {
+	// Calculates offset and zero padding
 	sh1.sh_offst = ELFHeaderSize
 	sh1.sh_size = uintptr(len(sc1))
 
@@ -224,8 +282,9 @@ func main() {
 
 	_offset := sh3.sh_offst + sh3.sh_size
 	var align  = sh4.sh_addralign
-	sz4 = align - (_offset % align)
-	sh4.sh_offst = _offset + sz4
+	s4.numZeroPad = align - (_offset % align)
+
+	sh4.sh_offst = _offset + s4.numZeroPad
 	sh4.sh_size = uintptr(len(sc4))
 	sh5.sh_offst = sh4.sh_offst + sh4.sh_size
 	sh5.sh_size = uintptr(len(sc5))
@@ -243,18 +302,23 @@ func main() {
 
 	// Output
 
-	// Write ELF Header
+	// Part 1: Write ELF Header
 	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
 	os.Stdout.Write(buf)
 
-	// Write Contents
-	os.Stdout.Write(sc1)
-	os.Stdout.Write(make([]uint8, sz4))
-	os.Stdout.Write(sc4)
-	os.Stdout.Write(sc5)
-	os.Stdout.Write(sc6)
+	// Part 2: Write Contents
+	for _, sect := range []*section{s1, s2, s3, s4, s5, s6} {
+		// Some sections do not have any contents
+		if sect.contents != nil {
+			// pad zeros when required
+			if sect.numZeroPad > 0 {
+				os.Stdout.Write(make([]uint8, sect.numZeroPad))
+			}
+			os.Stdout.Write(sect.contents)
+		}
+	}
 
-	// Write Section Header Table
+	// Part 3: Write Section Header Table
 	os.Stdout.Write(make([]uint8, paddingBeforeSectionHeaderTable))
 	for _, entryS := range sectionHeaderTable {
 		var buf []byte = ((*[unsafe.Sizeof(*entryS)]byte)(unsafe.Pointer(entryS)))[:]
