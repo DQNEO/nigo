@@ -271,25 +271,28 @@ var sectionHeaderTable = []*sectionHeader{
 	sh0,sh1, sh2, sh3, sh4, sh5, sh6,
 }
 
+func calcOffsetOfSection(s *section, prev *section) {
+	tentative_offset := prev.header.sh_offst + prev.header.sh_size
+	var align  = s.header.sh_addralign
+	if align == 0 || align == 1 {
+		s.numZeroPad = 0
+	} else {
+		s.numZeroPad = align - (tentative_offset % align)
+	}
+	s.header.sh_offst = tentative_offset + s.numZeroPad
+	s.header.sh_size = uintptr(len(s.contents))
+}
+
 func main() {
 	// Calculates offset and zero padding
 	sh1.sh_offst = ELFHeaderSize
 	sh1.sh_size = uintptr(len(sc1))
 
-	sh2.sh_offst = sh1.sh_offst + sh1.sh_size
-
-	sh3.sh_offst = sh2.sh_offst + sh2.sh_size
-
-	_offset := sh3.sh_offst + sh3.sh_size
-	var align  = sh4.sh_addralign
-	s4.numZeroPad = align - (_offset % align)
-
-	sh4.sh_offst = _offset + s4.numZeroPad
-	sh4.sh_size = uintptr(len(sc4))
-	sh5.sh_offst = sh4.sh_offst + sh4.sh_size
-	sh5.sh_size = uintptr(len(sc5))
-	sh6.sh_offst = sh5.sh_offst + sh5.sh_size
-	sh6.sh_size = uintptr(len(sc6))
+	calcOffsetOfSection(s2, s1)
+	calcOffsetOfSection(s3, s2)
+	calcOffsetOfSection(s4, s3)
+	calcOffsetOfSection(s5, s4)
+	calcOffsetOfSection(s6, s5)
 
 	shoff := (sh6.sh_offst + sh6.sh_size)
 	// shoff should be bytes of 8 * x
