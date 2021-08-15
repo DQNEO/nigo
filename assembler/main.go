@@ -203,70 +203,62 @@ var hts6 *SectionHeaderTableEntry = &SectionHeaderTableEntry{
 	sh_entsize:   0,
 }
 
-var textAlign = []byte{0,0,0,0,0,0}
-var body [][]byte = [][]byte{
-	text,
-	textAlign,
-	symtab,
-	strtab1,
-	strtabSectionNames,
-}
-
 var sectionHeaderTable = []*SectionHeaderTableEntry{
 	hts0,hts1,hts2,hts3,hts4,hts5,hts6,
 }
+var  symtabZeroPad uintptr
 
-func setOffsetsOfSectionHeaderTable() {
+func main() {
+	var paddingBeforeSectionHeaderTable uintptr
 
 	hts1.sh_offst = 0x40
 	hts1.sh_size = uintptr(len(text))
 	hts2.sh_offst = hts1.sh_offst + hts1.sh_size
-
 	hts3.sh_offst = hts2.sh_offst
-	var align = uintptr(len(textAlign))
-	hts4.sh_offst = hts3.sh_offst + align
+
+	_offset := hts3.sh_offst + hts3.sh_size
+	var align  = hts4.sh_addralign
+	zeroPad := align - (_offset % align)
+	symtabZeroPad = zeroPad
+	hts4.sh_offst = _offset + zeroPad
 	hts4.sh_size = uintptr(len(symtab))
 	hts5.sh_offst = hts4.sh_offst + hts4.sh_size
 	hts5.sh_size = uintptr(len(strtab1))
 	hts6.sh_offst = hts5.sh_offst + hts5.sh_size
 	hts6.sh_size = uintptr(len(strtabSectionNames))
-}
 
-func calcSectionHeaderOffset() (uintptr, uintptr) {
 	ehLen :=  elfHeader.e_ehsize
 	var bodyLen int
-	for _, buf := range body {
-		bodyLen += len(buf)
-	}
-
+	bodyLen += len(text)
+	bodyLen += int(symtabZeroPad) + len(symtab)
+	bodyLen += len(strtab1)
+	bodyLen += len(strtabSectionNames)
 	total := uintptr(ehLen) + uintptr(bodyLen)
-
 	// total should be  bytes of 8 * x
 	mod := total % 8
 	padding := 8 - mod
 	total += padding
-	return total, padding
-}
+	eshoff, paddingToshoff := total, padding
 
-
-func main() {
-	setOffsetsOfSectionHeaderTable()
-	var paddingBeforeSectionHeaderTable uintptr
-	elfHeader.e_shoff, paddingBeforeSectionHeaderTable = calcSectionHeaderOffset()
+	elfHeader.e_shoff, paddingBeforeSectionHeaderTable = eshoff, paddingToshoff
 	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
+	// Output
+
+	// Write ELF Header
 	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
 	os.Stdout.Write(buf)
 
-	for _, buf := range body {
-		os.Stdout.Write(buf)
-	}
+	// Write Contents
+	os.Stdout.Write(text)
+	os.Stdout.Write(make([]uint8, symtabZeroPad))
+	os.Stdout.Write(symtab)
+	os.Stdout.Write(strtab1)
+	os.Stdout.Write(strtabSectionNames)
 
-	for i:=0;i< int(paddingBeforeSectionHeaderTable);i++ {
-		os.Stdout.Write([]byte{0})
-	}
-
+	// Write Section Header Table
+	os.Stdout.Write(make([]uint8, paddingBeforeSectionHeaderTable))
 	for _, entryS := range sectionHeaderTable {
 		var buf []byte = ((*[unsafe.Sizeof(*entryS)]byte)(unsafe.Pointer(entryS)))[:]
 		os.Stdout.Write(buf)
