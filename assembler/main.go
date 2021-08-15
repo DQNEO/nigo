@@ -111,73 +111,70 @@ var sc1 []byte = code
 //           } Elf64_Sym;
 
 type symbolTableEntry struct {
+	// This member holds an index into the object file's symbol
+	//              string table, which holds character representations of the
+	//              symbol names.  If the value is nonzero, it represents a
+	//              string table index that gives the symbol name.  Otherwise,
+	//              the symbol has no name.
 	st_name uint32
+
+	/* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+	// #define STT_NOTYPE      0               /* Symbol type is unspecified */
+	// #define STT_OBJECT      1               /* Symbol is a data object */
+	// #define STT_FUNC        2               /* Symbol is a code object */
+	// #define STT_SECTION     3               /* Symbol associated with a section */
+	// #define STT_FILE        4               /* Symbol's name is file name */
+	// #define STT_COMMON      5               /* Symbol is a common data object */
+	// #define STT_TLS         6               /* Symbol is thread-local data object*/
+	// #define STT_NUM         7               /* Number of defined types.  */
+	// #define STT_LOOS        10              /* Start of OS-specific */
+	// #define STT_GNU_IFUNC   10              /* Symbol is indirect code object */
+	// #define STT_HIOS        12              /* End of OS-specific */
+	// #define STT_LOPROC      13              /* Start of processor-specific */
+	// #define STT_HIPROC      15              /* End of processor-specific */
 	st_info uint8
 	st_other uint8
 	//  Every symbol table entry is "defined" in relation to some
 	//  section.  This member holds the relevant section header
 	//  table index.
 	st_shndx uint16
+	// This member gives the value of the associated symbol.
 	st_value uintptr
 	st_size uint64
 }
 
 var symbolTable = []*symbolTableEntry{
 	&symbolTableEntry{
-		st_name:  0,
+	},
+	&symbolTableEntry{
+		st_info:  0x03, // STT_SECTION
+		st_shndx: 0x01, // section 1 ".txt"
+	},
+	&symbolTableEntry{
+		st_info:  0x03, // STT_SECTION
+		st_shndx: 0x02, // section 2 ".data"
+	},
+	&symbolTableEntry{
+		st_info:  0x03, // STT_SECTION
+		st_shndx: 0x03, // section 3 ".bss"
+	},
+	&symbolTableEntry{
+		st_name:  0x01, // "myfunc"
 		st_info:  0,
-		st_other: 0,
-		st_shndx: 0,
-		st_value: 0,
-		st_size:  0,
+		st_shndx: 0x01, // section 1 ".txt"
+		st_value: 0x24, // address of myfunc label
 	},
 	&symbolTableEntry{
-		st_name:  0,
-		st_info:  0x03,
-		st_other: 0,
-		st_shndx: 0x01,
-		st_value: 0,
-		st_size:  0,
-	},
-	&symbolTableEntry{
-		st_name:  0,
-		st_info:  0x03,
-		st_other: 0,
-		st_shndx: 0x02,
-		st_value: 0,
-		st_size:  0,
-	},
-	&symbolTableEntry{
-		st_name:  0,
-		st_info:  0x03,
-		st_other: 0,
-		st_shndx: 0x03,
-		st_value: 0,
-		st_size:  0,
-	},
-	&symbolTableEntry{
-		st_name:  0x01,
+		st_name:  0x08, // "myfunc2"
 		st_info:  0,
-		st_other: 0,
-		st_shndx: 0x01,
-		st_value: 0x24,
-		st_size:  0,
+		st_shndx: 0x01, // section 1 ".txt"
+		st_value: 0x25, // address of myfunc2 label
 	},
 	&symbolTableEntry{
-		st_name:  0x08,
-		st_info:  0,
-		st_other: 0,
-		st_shndx: 0x01,
-		st_value: 0x25,
-		st_size:  0,
-	},
-	&symbolTableEntry{
-		st_name:  0x10,
-		st_info:  0x10,
-		st_other: 0,
-		st_shndx: 0x01,
+		st_name:  0x10, // "main"
+		st_info:  0x10, // ?
+		st_shndx: 0x01, // section 1 ".txt"
 		st_value: 0,
-		st_size:  0,
 	},
 }
 
