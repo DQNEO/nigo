@@ -178,22 +178,21 @@ var symbolTable = []*symbolTableEntry{
 	},
 }
 
-// contents of ".strtab"
+// contents of the ".strtab" section
 var symbolNames = []string{
 	"myfunc",
 	"myfunc2",
 	"main",
 }
 
-var sc6 = []byte{
-	// SHT_STRTAB (e_shstrndx =  the section names)
-	0x00, 0x2e, 0x73, 0x79, 0x6d, 0x74, 0x61, 0x62, // .symtab
-	0x00, 0x2e, 0x73, 0x74, 0x72, 0x74, 0x61, 0x62, // .strtab
-	0x00, 0x2e, 0x73, 0x68, 0x73, 0x74, 0x72, 0x74, 0x61, 0x62, //.shstrtab
-	0x00, 0x2e, 0x74, 0x65, 0x78, 0x74, // .text
-	0x00, 0x2e, 0x64, 0x61, 0x74, 0x61, // .data
-	0x00, 0x2e, 0x62, 0x73, 0x73, // .bss
-	0x00,
+// contents of the ".shstrtab" section
+var sectionNames = []string{
+	".symtab",
+	".strtab",
+	".shstrtab",
+	".text",
+	".data",
+	".bss",
 }
 
 // https://man7.org/linux/man-pages/man5/elf.5.html
@@ -348,7 +347,6 @@ var sh6 *sectionHeader = &sectionHeader{
 
 var s6 = &section{
 	header: sh6,
-	contents: sc6,
 }
 
 var sectionHeaderTable = []*sectionHeader{
@@ -388,9 +386,20 @@ func makeStrTab() {
 	s5.contents = data
 }
 
+func makeShStrTab() {
+	var data []byte = []byte{0x00}
+	for _, name := range sectionNames {
+		buf := append([]byte(name), 0x00)
+		data = append(data, buf...)
+	}
+	s6.contents = data
+
+}
 func main() {
 	makeSymbolTable()
 	makeStrTab()
+	makeShStrTab()
+
 	// Calculates offset and zero padding
 	sh1.sh_offst = ELFHeaderSize
 	sh1.sh_size = uintptr(len(s1.contents))
