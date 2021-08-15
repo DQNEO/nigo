@@ -6,7 +6,10 @@ main:
   movq $0x1f, %rcx
   addq %rcx, %rax
   callq myfunc
+  callq myfunc2
   retq
   retq
 myfunc:
+  retq
+myfunc2:
   retq
