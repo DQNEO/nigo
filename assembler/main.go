@@ -83,16 +83,16 @@ var _text1 = []byte{
 var _text2 []byte = []byte{
 	// .text section
 	// offset: 0x40,
-	// size=len(text)=>0x12
+	// size=len(sc1)=>0x12
 	0x48, 0xc7, 0xc0, 0x0b, 0x00, 0x00, 0x00, // movq $0xb, %rax
 	0x48, 0xc7, 0xc1, 0x1f, 0x00, 0x00, 0x00, // movq $0x1f, %rcx
 	0x48, 0x01, 0xc8,                         // addq %rcx, %rax
 	0xc3, // retq
 }
 
-var text = _text2
+var sc1 []byte = _text2
 
-var symtab = []byte{
+var sc4 = []byte{
 	//  SHT_SYMTAB (symbol table)
 	// size:0x78(=0x18 * 5)
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -102,7 +102,7 @@ var symtab = []byte{
 	0x01, 0x00, 0x00, 0x00, 0x10, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 }
 
-var strtab1 = []byte{
+var sc5 = []byte{
 	// SHT_STRTAB
 	// size: 0x06
 	0x00,
@@ -110,7 +110,7 @@ var strtab1 = []byte{
 	0x00,
 }
 
-var strtabSectionNames = []byte{
+var sc6 = []byte{
 	// SHT_STRTAB (e_shstrndx =  the section names)
 	0x00, 0x2e, 0x73, 0x79, 0x6d, 0x74, 0x61, 0x62, // .symtab
 	0x00, 0x2e, 0x73, 0x74, 0x72, 0x74, 0x61, 0x62, // .strtab
@@ -148,6 +148,8 @@ var sh1 = &sectionHeader{
 	sh_entsize:   0,
 }
 
+var sz1 uintptr
+
 var sh2 = &sectionHeader{
 	sh_name:      0x21, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
@@ -155,9 +157,10 @@ var sh2 = &sectionHeader{
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
-	sh_addralign: 01,
+	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
+var sz2 uintptr
 
 var sh3 = &sectionHeader{
 	sh_name:      0x27, // ".bss"
@@ -169,6 +172,7 @@ var sh3 = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
+var sz3 uintptr
 
 var sh4 = &sectionHeader{
 	sh_name:      0x01, // ".symtab"
@@ -180,6 +184,7 @@ var sh4 = &sectionHeader{
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
+var sz4 uintptr
 
 var sh5 = &sectionHeader{
 	sh_name:      0x09, // ".strtab"
@@ -191,7 +196,7 @@ var sh5 = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-
+var sz5 uintptr
 //  this is what e_shstrndx points to
 var sh6 *sectionHeader = &sectionHeader{
 	sh_name:      0x11, // ".shstrtab"
@@ -203,6 +208,7 @@ var sh6 *sectionHeader = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
+var sz6 uintptr
 
 var sectionHeaderTable = []*sectionHeader{
 	sh0,sh1, sh2, sh3, sh4, sh5, sh6,
@@ -210,7 +216,7 @@ var sectionHeaderTable = []*sectionHeader{
 
 func main() {
 	sh1.sh_offst = ELFHeaderSize
-	sh1.sh_size = uintptr(len(text))
+	sh1.sh_size = uintptr(len(sc1))
 
 	sh2.sh_offst = sh1.sh_offst + sh1.sh_size
 
@@ -218,14 +224,13 @@ func main() {
 
 	_offset := sh3.sh_offst + sh3.sh_size
 	var align  = sh4.sh_addralign
-	zeroPad := align - (_offset % align)
-	symtabZeroPad := zeroPad
-	sh4.sh_offst = _offset + zeroPad
-	sh4.sh_size = uintptr(len(symtab))
+	sz4 = align - (_offset % align)
+	sh4.sh_offst = _offset + sz4
+	sh4.sh_size = uintptr(len(sc4))
 	sh5.sh_offst = sh4.sh_offst + sh4.sh_size
-	sh5.sh_size = uintptr(len(strtab1))
+	sh5.sh_size = uintptr(len(sc5))
 	sh6.sh_offst = sh5.sh_offst + sh5.sh_size
-	sh6.sh_size = uintptr(len(strtabSectionNames))
+	sh6.sh_size = uintptr(len(sc6))
 
 	shoff := (sh6.sh_offst + sh6.sh_size)
 	// shoff should be bytes of 8 * x
@@ -243,11 +248,11 @@ func main() {
 	os.Stdout.Write(buf)
 
 	// Write Contents
-	os.Stdout.Write(text)
-	os.Stdout.Write(make([]uint8, symtabZeroPad))
-	os.Stdout.Write(symtab)
-	os.Stdout.Write(strtab1)
-	os.Stdout.Write(strtabSectionNames)
+	os.Stdout.Write(sc1)
+	os.Stdout.Write(make([]uint8, sz4))
+	os.Stdout.Write(sc4)
+	os.Stdout.Write(sc5)
+	os.Stdout.Write(sc6)
 
 	// Write Section Header Table
 	os.Stdout.Write(make([]uint8, paddingBeforeSectionHeaderTable))
