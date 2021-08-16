@@ -1,3 +1,7 @@
+.data
+myGlobalInt:
+  .quad 0x0b
+
 .text
 .global _start
 _start:
@@ -10,6 +14,7 @@ _start:
   nop
   nop
   movq $0x2a, %rax
+  movq myGlobalInt(%rip), %rax
   movq $0xb, %rax
   movq $0x1f, %rcx
   addq %rcx, %rax

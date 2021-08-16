@@ -49,6 +49,7 @@ type Elf64_Ehdr struct {
 }
 
 const ELFHeaderSize = unsafe.Sizeof(Elf64_Ehdr{})
+const SectionHeaderEntrySize = unsafe.Sizeof(sectionHeader{})
 
 var elfHeader = Elf64_Ehdr{
 	e_ident: [16]uint8{
@@ -70,7 +71,7 @@ var elfHeader = Elf64_Ehdr{
 	e_ehsize: uint16(ELFHeaderSize),
 	e_phentsize:0,
 	e_phnum:0,
-	e_shentsize:uint16(unsafe.Sizeof(*sh0)), // 64
+	e_shentsize:uint16(SectionHeaderEntrySize), // 64
 	// e_shnum: 0, // calculated at runtime
 	// e_shstrndx: 0, // calculated at runtime
 }
@@ -84,6 +85,7 @@ var code []byte = []byte{
 	// _start:
 	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nop * 8
 	0x48, 0xc7, 0xc0, 0x2a, 0x00, 0x00, 0x00, // movq $0x2a, %rax
+	0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00,  // movq 0x0(%rip),%rax        # e <_start+0xe>
 	0x48, 0xc7, 0xc0, 0x0b, 0x00, 0x00, 0x00, // movq $0xb, %rax
 	0x48, 0xc7, 0xc1, 0x1f, 0x00, 0x00, 0x00, // movq $0x1f, %rcx
 	0x48, 0x01, 0xc8,             // addq %rcx, %rax
@@ -159,30 +161,35 @@ var symbolTable = []*symbolTableEntry{
 	},
 	&symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x01, // section 1 ".txt"
+		st_shndx: 0x01, // section ".txt"
 	},
 	&symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x02, // section 2 ".data"
+		st_shndx: 0x03, // section ".data"
 	},
 	&symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x03, // section 3 ".bss"
+		st_shndx: 0x04, // section ".bss"
 	},
 	&symbolTableEntry{
-		st_name:  0x01, // "myfunc"
+		st_name:  0x01, // "myGlobalInt"
+		st_info:  0,
+		st_shndx: 0x03, // section ".data"
+	},
+	&symbolTableEntry{
+		st_name:  0x0d, // "myfunc"
 		st_info:  0,
 		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x3b, // address of myfunc label
+		st_value: 0x42, // address of myfunc label
 	},
 	&symbolTableEntry{
-		st_name:  0x08, // "myfunc2"
+		st_name:  0x14, // "myfunc2"
 		st_info:  0,
 		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x3c, // address of myfunc2 label
+		st_value: 0x43, // address of myfunc2 label
 	},
 	&symbolTableEntry{
-		st_name:  0x10, // "_start"
+		st_name:  0x1c, // "_start"
 		st_info:  0x10, // ?
 		st_shndx: 0x01, // section 1 ".txt"
 		st_value: 0,
@@ -191,6 +198,7 @@ var symbolTable = []*symbolTableEntry{
 
 // contents of the ".strtab" section
 var symbolNames = []string{
+	"myGlobalInt",
 	"myfunc",
 	"myfunc2",
 	"_start",
@@ -201,7 +209,7 @@ var sectionNames = []string{
 	".symtab",
 	".strtab",
 	".shstrtab",
-	".text",
+	".rela.text",
 	".data",
 	".bss",
 }
@@ -247,16 +255,8 @@ type section struct {
 	contents []uint8
 }
 
-var sh0 = &sectionHeader{
-}
-
-var s0 = &section{
-	header:     sh0,
-	contents:   nil,
-}
-
 var sh1 = &sectionHeader{
-	sh_name:      0x1b, // ".text"
+	sh_name:      0x20, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flag:      0x06, // SHF_ALLOC|SHF_EXECINSTR
 	sh_addr:      0,
@@ -271,8 +271,28 @@ var s1 = &section{
 	contents: sc1,
 }
 
+var sh1rela = &sectionHeader{
+	sh_name:      0x1b, // ".rela.text"
+	sh_type:      0x04, // SHT_RELA ?
+	sh_flag:      0x40, // ??
+	sh_link:      0x05,
+	sh_info:      0x01,
+	sh_addralign: 0x08,
+	sh_entsize:   0x18,
+}
+var sc1rela = []byte{
+	0x12 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
+	0x02 ,0x00 ,0x00 ,0x00 ,0x02 ,0x00 ,0x00 ,0x00,
+	0xfc ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff,
+}
+
+var s1rela = &section{
+	header:     sh1rela,
+	contents:   sc1rela,
+}
+// Section ".data"
 var sh2 = &sectionHeader{
-	sh_name:      0x21, // ".data"
+	sh_name:      0x26, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -288,7 +308,7 @@ var s2 = &section{
 }
 
 var sh3 = &sectionHeader{
-	sh_name:      0x27, // ".bss"
+	sh_name:      0x2c, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -308,8 +328,8 @@ var sh4 = &sectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flag:      0,
 	sh_addr:      0,
-	sh_link:      0x05,
-	sh_info:      0x06,
+	sh_link:      0x06,
+	sh_info:      0x07,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -361,7 +381,7 @@ var s6 = &section{
 }
 
 var sectionHeaderTable = []*sectionHeader{
-	sh0,sh1, sh2, sh3, sh4, sh5, sh6,
+	&sectionHeader{}, sh1, sh1rela, sh2, sh3, sh4, sh5, sh6,
 }
 
 func calcOffsetOfSection(s *section, prev *section) {
@@ -379,6 +399,12 @@ func calcOffsetOfSection(s *section, prev *section) {
 	}
 	s.header.sh_offst = tentative_offset + s.numZeroPad
 	s.header.sh_size = uintptr(len(s.contents))
+}
+
+func makeDataSection() {
+	s2.contents = []byte{
+		0x0b,0,0,0,0,0,0,0, // .quad 0x0b (8 bytes)
+	}
 }
 
 func makeSymbolTable() {
@@ -400,13 +426,15 @@ func makeStrTab() {
 func makeShStrTab() {
 	var data []byte = []byte{0x00}
 	for _, name := range sectionNames {
-		buf := append([]byte(name), 0x00)
+		buf := []byte(name)
+		buf = append(buf, 0x00)
 		data = append(data, buf...)
 	}
 	s6.contents = data
 
 }
 func main() {
+	makeDataSection()
 	makeSymbolTable()
 	makeStrTab()
 	makeShStrTab()
@@ -419,7 +447,8 @@ func main() {
 	calcOffsetOfSection(s3, s2)
 	calcOffsetOfSection(s4, s3)
 	calcOffsetOfSection(s5, s4)
-	calcOffsetOfSection(s6, s5)
+	calcOffsetOfSection(s1rela, s5)
+	calcOffsetOfSection(s6, s1rela)
 
 	shoff := (sh6.sh_offst + sh6.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
@@ -440,7 +469,7 @@ func main() {
 	os.Stdout.Write(buf)
 
 	// Part 2: Write Contents
-	for _, sect := range []*section{s1, s2, s3, s4, s5, s6} {
+	for _, sect := range []*section{s1, s2, s3, s4, s5, s1rela, s6} {
 		// Some sections do not have any contents
 		if sect.contents != nil {
 			// pad zeros when required
