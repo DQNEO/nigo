@@ -268,16 +268,23 @@ var sectionNames = []string{
 	".bss",
 }
 
+type sectionHeaderTable struct {
+	padding uintptr
+	entries []*sectionHeader
+}
 // # Part3: Section Header Table
-var sectionHeaderTable = []*sectionHeader{
-	sh_null, // NULL
-	sh_text,          // .text
-	sh_rela_text,     // .rela.text
-	sh_data,          // .data
-	sh_bss,           // .bss
-	sh_symtab,        // .symtab
-	sh_strtab,        // .strtab
-	sh_shstrtab,      // .shstrtab
+
+var sht = &sectionHeaderTable{
+	entries: []*sectionHeader{
+		sh_null,      // NULL
+		sh_text,      // .text
+		sh_rela_text, // .rela.text
+		sh_data,      // .data
+		sh_bss,       // .bss
+		sh_symtab,    // .symtab
+		sh_strtab,    // .strtab
+		sh_shstrtab,  // .shstrtab
+	},
 }
 
 var sh_null = &sectionHeader{}
@@ -469,23 +476,25 @@ func main() {
 	shoff := (sh_shstrtab.sh_offst + sh_shstrtab.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
-	var paddingBeforeSectionHeaderTable uintptr
 	if mod != 0 {
-		paddingBeforeSectionHeaderTable = 8 - mod
+		sht.padding = 8 - mod
 	}
-	e_shoff := shoff + paddingBeforeSectionHeaderTable
+	e_shoff := shoff + sht.padding
 	elfHeader.e_shoff = e_shoff
-	elfHeader.e_shnum = uint16(len(sectionHeaderTable))
+	elfHeader.e_shnum = uint16(len(sht.entries))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
 	// Output
+	output(&elfHeader, sectionsOrderByContents, sht)
+}
 
+func output(elfHeader *Elf64_Ehdr, sections []*section, sht *sectionHeaderTable) {
 	// Part 1: Write ELF Header
-	var buf []byte = ((*[unsafe.Sizeof(elfHeader)]byte)(unsafe.Pointer(&elfHeader)))[:]
+	var buf []byte = ((*[unsafe.Sizeof(*elfHeader)]byte)(unsafe.Pointer(elfHeader)))[:]
 	os.Stdout.Write(buf)
 
 	// Part 2: Write Contents
-	for _, sect := range sectionsOrderByContents {
+	for _, sect := range sections {
 		// Some sections do not have any contents
 		if sect.contents != nil {
 			// pad zeros when required
@@ -497,9 +506,9 @@ func main() {
 	}
 
 	// Part 3: Write Section Header Table
-	os.Stdout.Write(make([]uint8, paddingBeforeSectionHeaderTable))
-	for _, entryS := range sectionHeaderTable {
-		var buf []byte = ((*[unsafe.Sizeof(*entryS)]byte)(unsafe.Pointer(entryS)))[:]
+	os.Stdout.Write(make([]uint8, sht.padding))
+	for _, entry := range sht.entries {
+		var buf []byte = ((*[unsafe.Sizeof(*entry)]byte)(unsafe.Pointer(entry)))[:]
 		os.Stdout.Write(buf)
 	}
 }
