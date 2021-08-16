@@ -370,7 +370,14 @@ var s6 = &section{
 }
 
 var sectionHeaderTable = []*sectionHeader{
-	&sectionHeader{}, sh1, sh1rela, sh2, sh3, sh4, sh5, sh6,
+	&sectionHeader{},
+	sh1,
+	sh1rela,
+	sh2,
+	sh3,
+	sh4,
+	sh5,
+	sh6,
 }
 
 func calcOffsetOfSection(s *section, prev *section) {
