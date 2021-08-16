@@ -7,6 +7,11 @@ main:
   addq %rcx, %rax
   callq myfunc
   callq myfunc2
+
+  movq $0x3c, %rax
+  movq $0x2a, %rdi
+  syscall
+
   retq
   retq
 myfunc:
