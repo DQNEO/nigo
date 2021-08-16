@@ -17,10 +17,10 @@ test: gnu my.o.xxd gnu.o.xxd
 	make diff
 
 my.o.xxd: my.o
-	xxd -g 1 $< > $@
+	xxd -g 1 -c 8 -a $< > $@
 
 gnu.o.xxd: gnu.o
-	xxd -g 1 $< > $@
+	xxd -g 1 -c 8 -a $< > $@
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd

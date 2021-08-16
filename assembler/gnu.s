@@ -1,6 +1,14 @@
 .text
 .global _start
 _start:
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
   movq $0x2a, %rax
   movq $0xb, %rax
   movq $0x1f, %rcx
@@ -13,8 +21,12 @@ _start:
   syscall
 
   retq
-  retq
 myfunc:
   retq
 myfunc2:
+  retq
+  retq
+  retq
+  retq
+  retq
   retq
