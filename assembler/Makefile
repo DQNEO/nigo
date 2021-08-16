@@ -1,35 +1,31 @@
 .PHONEY: all
 
-all: min my.o
+all: gnu gnu.o.xxd my.o.xxd
 
 my.o: main.go
-	go run main.go > my.o
-
-.PHONY: dump
-dump:
-	xxd my.o
+	go run $< > $@
 
 # test by GNU tools
-min.o: min.s
-	as -o min.o min.s
+gnu.o: gnu.s
+	as -o $@ $<
 
-min: min.o
-	ld -o min min.o
+gnu: gnu.o
+	ld -o $@ $<
 
-test: min
-	./min; test $$? -eq 42 && echo ok
+test: gnu my.o.xxd gnu.o.xxd
+	./gnu; test $$? -eq 42 && echo ok
 	make diff
 
 my.o.xxd: my.o
 	xxd -g 1 $< > $@
 
-min.o.xxd: min.o
+gnu.o.xxd: gnu.o
 	xxd -g 1 $< > $@
 
 .PHONY: diff
-diff: min.o.xxd my.o.xxd
-	 diff --color -u min.o.xxd my.o.xxd
+diff: gnu.o.xxd my.o.xxd
+	 diff --color -u gnu.o.xxd my.o.xxd
 
 .PHONY: clean
 clean:
-	rm *.o min
+	rm -f gnu *.o *.xxd
