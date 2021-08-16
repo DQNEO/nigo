@@ -16,7 +16,7 @@ docker run \
     --security-opt='seccomp=unconfined'\
     -w /root/go/src/github.com/DQNEO/babygo\
     -v `pwd`:/root/go/src/github.com/DQNEO/babygo\
-    --env PATH=/usr/lib/go-1.15/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\
+    --env PATH=/usr/lib/go-1.17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\
     --env GOPATH=/root/go \
     --tmpfs=/tmp/tmpfs:rw,size=500m,mode=1777\
     --tmpfs=/root/go/src/github.com/DQNEO/babygo/tmp:rw,size=500m,mode=1777\

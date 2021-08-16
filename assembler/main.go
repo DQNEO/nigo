@@ -157,19 +157,11 @@ type symbolTableEntry struct {
 }
 
 var symbolTable = []*symbolTableEntry{
-	&symbolTableEntry{
-	},
-	&symbolTableEntry{
-		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x01, // section ".txt"
+	&symbolTableEntry{ // NULL entry
 	},
 	&symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
 		st_shndx: 0x03, // section ".data"
-	},
-	&symbolTableEntry{
-		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x04, // section ".bss"
 	},
 	&symbolTableEntry{
 		st_name:  0x01, // "myGlobalInt"
@@ -282,7 +274,7 @@ var sh1rela = &sectionHeader{
 }
 var sc1rela = []byte{
 	0x12 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
-	0x02 ,0x00 ,0x00 ,0x00 ,0x02 ,0x00 ,0x00 ,0x00,
+	0x02 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00,
 	0xfc ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff,
 }
 
@@ -329,7 +321,7 @@ var sh4 = &sectionHeader{
 	sh_flag:      0,
 	sh_addr:      0,
 	sh_link:      0x06,
-	sh_info:      0x07,
+	sh_info:      0x05,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -469,7 +461,16 @@ func main() {
 	os.Stdout.Write(buf)
 
 	// Part 2: Write Contents
-	for _, sect := range []*section{s1, s2, s3, s4, s5, s1rela, s6} {
+	var sections = []*section{
+		s1, // .text
+		s2, // .data
+		s3, // .bss (empty)
+		s4, // .symtab
+		s5, // .strtab
+		s1rela, // .rela.text
+		s6, // .shstrtab
+	}
+	for _, sect := range sections {
 		// Some sections do not have any contents
 		if sect.contents != nil {
 			// pad zeros when required
