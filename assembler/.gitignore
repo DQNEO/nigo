@@ -1,3 +1,4 @@
 /gnu
 /*.o
 /*.xxd
+/*.readelf

@@ -1,6 +1,6 @@
 .PHONEY: all
 
-all: gnu gnu.o.xxd my.o.xxd
+all: gnu gnu.o.xxd my.o.xxd gnu.readelf
 
 my.o: main.go
 	go run $< > $@
@@ -12,8 +12,11 @@ gnu.o: gnu.s
 gnu: gnu.o
 	ld -o $@ $<
 
-test: gnu my.o.xxd gnu.o.xxd
+test-gnu: gnu
 	./gnu; test $$? -eq 42 && echo ok
+
+test: gnu my.o.xxd gnu.o.xxd
+	make test-gnu
 	make diff
 
 my.o.xxd: my.o
@@ -21,6 +24,9 @@ my.o.xxd: my.o
 
 gnu.o.xxd: gnu.o
 	xxd -g 1 -c 8 $< > $@
+
+gnu.readelf: gnu.o
+	readelf -a -W $< > $@
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd
