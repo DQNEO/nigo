@@ -17,14 +17,15 @@ test: gnu my.o.xxd gnu.o.xxd
 	make diff
 
 my.o.xxd: my.o
-	xxd -g 1 -c 8 -a $< > $@
+	xxd -g 1 -c 8 $< > $@
 
 gnu.o.xxd: gnu.o
-	xxd -g 1 -c 8 -a $< > $@
+	xxd -g 1 -c 8 $< > $@
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd
-	 diff --color -u gnu.o.xxd my.o.xxd
+	diff --color -u my.o.xxd gnu.o.xxd
+	@echo ok
 
 .PHONY: clean
 clean:
