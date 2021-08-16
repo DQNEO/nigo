@@ -1,6 +1,8 @@
 .data
 myGlobalInt:
   .quad 0x0a
+pGlobalInt:
+  .quad myGlobalInt
 
 .text
 .global _start
@@ -16,7 +18,9 @@ _start:
   callq myfunc
   callq myfunc2
 
-  movq myGlobalInt(%rip), %rax
+
+  movq pGlobalInt(%rip), %rax
+  movq (%rax), %rax
   movq $0x20, %rdi
   addq %rax, %rdi
   movq $0x3c, %rax

@@ -173,6 +173,7 @@ var sectionsOrderByContents = []*section{
 	s_symtab,    // .symtab
 	s_strtab,    // .strtab
 	s_rela_text, // .rela.text
+	s_rela_data, // .rela.data
 	s_shstrtab,  // .shstrtab
 }
 
@@ -184,9 +185,10 @@ var text []byte = []byte{
 
 	// _start:
 	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nop * 8
-	0xe8, 0x20, 0x00, 0x00, 0x00, // call myfunc
-	0xe8, 0x1c, 0x00, 0x00, 0x00, // call myfunc2
+	0xe8, 0x23, 0x00, 0x00, 0x00, // call myfunc
+	0xe8, 0x1f, 0x00, 0x00, 0x00, // call myfunc2
 	0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00, // movq myGlobalInt(%rip), %rax
+	0x48, 0x8b, 0x00, // movq (%rax),%rax
 	0x48, 0xc7, 0xc7, 0x20, 0x00, 0x00, 0x00, // movq $0x20, %rdi
 	0x48, 0x01, 0xc7, // addq %rax, %rdi
 	0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // movq $0x3c, %rax
@@ -208,6 +210,7 @@ var text []byte = []byte{
 // .data
 var data = []byte{
 	0x0a,0,0,0,0,0,0,0, // .quad 0x0a (8 bytes)
+	0,0,0,0,0,0,0,0, // zero ?
 }
 
 // .symtab
@@ -222,21 +225,28 @@ var symbolTable = []*symbolTableEntry{
 		st_name:  0x01, // "myGlobalInt"
 		st_info:  0,
 		st_shndx: 0x03, // section ".data"
+		st_value: 0x0, // ?
 	},
 	&symbolTableEntry{
-		st_name:  0x0d, // "myfunc"
+		st_name:  0x0d, // "pGlobalInt"
+		st_info:  0,
+		st_shndx: 0x03, // section ".data"
+		st_value: 0x08, // ?
+	},
+	&symbolTableEntry{
+		st_name:  0x18, // "myfunc"
 		st_info:  0,
 		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x2d, // address of myfunc label
+		st_value: 0x30, // address of myfunc label
 	},
 	&symbolTableEntry{
-		st_name:  0x14, // "myfunc2"
+		st_name:  0x1f, // "myfunc2"
 		st_info:  0,
 		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x2e, // address of myfunc2 label
+		st_value: 0x31, // address of myfunc2 label
 	},
 	&symbolTableEntry{
-		st_name:  0x1c, // "_start"
+		st_name:  0x27, // "_start"
 		st_info:  0x10, // ?
 		st_shndx: 0x01, // section 1 ".txt"
 		st_value: 0,
@@ -246,6 +256,7 @@ var symbolTable = []*symbolTableEntry{
 // contents of .strtab
 var symbolNames = []string{
 	"myGlobalInt",
+	"pGlobalInt",
 	"myfunc",
 	"myfunc2",
 	"_start",
@@ -255,7 +266,13 @@ var symbolNames = []string{
 var rela_text = []byte{
 	0x15 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
 	0x02 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00,
-	0xfc ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff ,0xff,
+	0x04 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
+}
+
+var rela_data = []byte{
+	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
+	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00,
+	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
 }
 
 // contents of .shstrtab"
@@ -264,7 +281,7 @@ var sectionNames = []string{
 	".strtab",
 	".shstrtab",
 	".rela.text",
-	".data",
+	".rela.data",
 	".bss",
 }
 
@@ -280,6 +297,7 @@ var sht = &sectionHeaderTable{
 		sh_text,      // .text
 		sh_rela_text, // .rela.text
 		sh_data,      // .data
+		sh_rela_data, // .rela.data
 		sh_bss,       // .bss
 		sh_symtab,    // .symtab
 		sh_strtab,    // .strtab
@@ -303,16 +321,15 @@ var sh_text = &sectionHeader{
 var sh_rela_text = &sectionHeader{
 	sh_name:      0x1b, // ".rela.text"
 	sh_type:      0x04, // SHT_RELA ?
-	sh_flag:      0x40, // ??
-	sh_link:      0x05,
+	sh_flag:      0x40, // * ??
+	sh_link:      0x06,
 	sh_info:      0x01,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
 
-// Section ".data"
 var sh_data = &sectionHeader{
-	sh_name:      0x26, // ".data"
+	sh_name:      0x2b, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -322,8 +339,18 @@ var sh_data = &sectionHeader{
 	sh_entsize:   0,
 }
 
+var sh_rela_data = &sectionHeader{
+	sh_name:      0x26, // ".rela.data"
+	sh_type:      0x04, // SHT_RELA ?
+	sh_flag:      0x40, // I ??
+	sh_link:      0x06,
+	sh_info:      0x03,
+	sh_addralign: 0x08,
+	sh_entsize:   0x18,
+}
+
 var sh_bss = &sectionHeader{
-	sh_name:      0x2c, // ".bss"
+	sh_name:      0x31, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -339,8 +366,8 @@ var sh_symtab = &sectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flag:      0,
 	sh_addr:      0,
-	sh_link:      0x06,
-	sh_info:      0x05,
+	sh_link:      0x07,
+	sh_info:      0x06,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -385,6 +412,11 @@ var s_text = &section{
 var s_rela_text = &section{
 	header:   sh_rela_text,
 	contents: rela_text,
+}
+
+var s_rela_data = &section{
+	header:   sh_rela_data,
+	contents: rela_data,
 }
 
 var s_data = &section{
