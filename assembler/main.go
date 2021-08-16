@@ -80,7 +80,8 @@ var code []byte = []byte{
 	// .text section
 	// offset: 0x40,
 	// size=len(sc1)=>0x12
-	// main:
+
+	// _start:
 	0x48, 0xc7, 0xc0, 0x2a, 0x00, 0x00, 0x00, // movq $0x2a, %rax
 	0x48, 0xc7, 0xc0, 0x0b, 0x00, 0x00, 0x00, // movq $0xb, %rax
 	0x48, 0xc7, 0xc1, 0x1f, 0x00, 0x00, 0x00, // movq $0x1f, %rcx
@@ -176,7 +177,7 @@ var symbolTable = []*symbolTableEntry{
 		st_value: 0x35, // address of myfunc2 label
 	},
 	&symbolTableEntry{
-		st_name:  0x10, // "main"
+		st_name:  0x10, // "_start"
 		st_info:  0x10, // ?
 		st_shndx: 0x01, // section 1 ".txt"
 		st_value: 0,
@@ -187,7 +188,7 @@ var symbolTable = []*symbolTableEntry{
 var symbolNames = []string{
 	"myfunc",
 	"myfunc2",
-	"main",
+	"_start",
 }
 
 // contents of the ".shstrtab" section

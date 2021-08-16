@@ -1,6 +1,6 @@
 .text
-.global main
-main:
+.global _start
+_start:
   movq $0x2a, %rax
   movq $0xb, %rax
   movq $0x1f, %rcx
