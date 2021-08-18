@@ -11,54 +11,64 @@ type token struct {
 	raw string
 }
 
-func isIdent(ch byte) bool{
-	switch  {
-	case ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'):
-		return true
-	case '0' <= ch && ch <= '9':
-		return true
-	case ch == '_':
-		return true
-	}
-	return false
+// https://sourceware.org/binutils/docs-2.37/as.html#Symbol-Names
+// Symbol names begin with a letter or with one of ‘._’.
+// Symbol names do not start with a digit.
+//  An exception to this rule is made for Local Labels.
+func isSymbolBeginning(ch byte) bool {
+	return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ch == '.' || ch == '_'
+}
+
+// On most machines, you can also use $ in symbol names.
+func isSymbol(ch byte) bool{
+	return isSymbolBeginning(ch) || '0' <= ch && ch <= '9' || ch == '$'
 }
 
 func peekCh() byte {
-	if byteIndex == len(source) {
+	if idx == len(source) {
 		return 255
 	}
-	return source[byteIndex]
+	return source[idx]
 }
 
-func readCh() byte {
-	if byteIndex == len(source) {
-		return 255
+// https://sourceware.org/binutils/docs-2.37/as.html#Whitespace
+// Whitespace is one or more blanks or tabs, in any order.
+// Whitespace is used to separate symbols, and to make programs neater for people to read.
+// Unless within character constants (see Character Constants), any whitespace means the same as exactly one space.
+func skipWhitespaces() {
+	for  {
+		if idx == len(source) {
+			return
+		}
+		ch := source[idx]
+		if ch == ' ' || ch == '\t' {
+			idx++
+			continue
+		}
+		return
 	}
-	ch := source[byteIndex]
-	byteIndex++
-	return ch
 }
 
-func readRegi() string {
-	var buf []byte
-	for {
-		ch := peekCh()
-		if isIdent(ch) {
-			buf = append(buf, ch)
-			byteIndex++
-		} else {
-			return string(buf)
+func skipLineComment() {
+	for  {
+		if idx == len(source) {
+			return
+		}
+		ch := source[idx]
+		idx++
+		if ch == '\n' {
+			return
 		}
 	}
 }
 
-func readIdent(first byte) string {
+func readSymbol(first byte) string {
 	var buf []byte  = []byte{first}
 	for {
 		ch := peekCh()
-		if isIdent(ch) {
+		if isSymbol(ch) {
 			buf = append(buf, ch)
-			byteIndex++
+			idx++
 		} else {
 			return string(buf)
 		}
@@ -69,88 +79,13 @@ func readNumber(first byte) string {
 	var buf []byte  = []byte{first}
 	for {
 		ch := peekCh()
-		if ('0' <= ch && ch <= '9') || ch == 'x' {
+		if ('0' <= ch && ch <= '9') || ch == 'x' || ('a' <= ch && ch <= 'f') {
 			buf = append(buf, ch)
-			byteIndex++
+			idx++
 		} else {
 			return string(buf)
 		}
 	}
-}
-
-var source []byte
-var byteIndex int
-
-func tokenize() []*token {
-	var tokens []*token
-	for  {
-		ch := readCh()
-		fmt.Println("byte:", ch)
-		var tok *token
-		switch  {
-		case ch == 255:
-			fmt.Println("EOF")
-			return tokens
-		case ch == ' ':
-			continue
-		case ch == '\n':
-			tok = &token{
-			typ: "newline",
-			raw: "",
-			}
-		case ch == '%':
-			regi := readRegi()
-			tok = &token{
-				typ: "regi",
-				raw: regi,
-			}
-		case ch == ':':
-			tok = &token{
-				typ: "punct",
-				raw: ":",
-			}
-/*
-		case ch == '.':
-			// keyword (".data" or ".text) or punct
-			dotstring := readIdent(ch)
-			tok = &token{
-				typ: "dotstring",
-				raw: dotstring,
-			}
-
- */
-		case ch == '.', ch == ',', ch == '(', ch ==')':
-			tok = &token{
-				typ: "punct",
-				raw: ".",
-			}
-		case ch == '$':
-			n := readNumber(ch)
-			tok = &token{
-				typ: "dolnum",
-				raw: n,
-			}
-		case '0' <= ch && ch <= '9':
-			n := readNumber(ch)
-			tok = &token{
-				typ: "number",
-				raw: n,
-			}
-		case isIdent(ch):
-			ident := readIdent(ch)
-			tok = &token{
-				typ: "ident",
-				raw: ident,
-			}
-		default:
-			panic(ch)
-		}
-		if tok != nil {
-			tokens = append(tokens, tok)
-		}
-	}
-
-	return tokens
 }
 
 
@@ -640,83 +575,129 @@ func makeShStrTab() {
 
 }
 
-func expect(bol bool) {
-	if !bol {
-		panic("expect failure")
+
+func trySymbol() string {
+	first := source[idx]
+	idx++
+	if isSymbolBeginning(first) {
+		return readSymbol(first)
+	} else {
+		return ""
 	}
 }
 
-type AstDataBody struct {
-	kind *token // ".quad"
-	val *token  // "0x123"
+var source []byte
+var idx int
+type statement struct {
+	labelSymbol string
+	keySymbol string
+	args string
 }
 
-func parseDataContents(tokens []*token) (*AstDataBody, []*token) {
-	expect(tokens[0].raw == ".")
-	expect(tokens[1].typ == "ident") // "quad" or something
-
-	return &AstDataBody{
-		kind: tokens[1],
-		val:  tokens[2],
-	}, tokens[3:]
-
-}
-
-func parseDataSection(tokens []*token) {
-	fmt.Printf("token=%+v\n", tokens[0])
-	tok := tokens[0]
-	switch {
-	case tok.typ == "ident":
-		expect(tokens[1].raw == ":")
-		expect(tokens[2].typ == "newline")
-		astDataBody , tks := parseDataContents(tokens[3:])
-		tokens = tks
-		fmt.Printf("astDataBody=%+v\n", astDataBody)
-	default:
-		panic("STOP")
+// https://sourceware.org/binutils/docs-2.37/as.html#Statements
+//
+// A statement ends at a newline character (‘\n’) or a line separator character.
+// The newline or line separator character is considered to be part of the preceding statement.
+// Newlines and separators within character constants are an exception: they do not end statements.
+//
+// It is an error to end any statement with end-of-file: the last character of any input file should be a newline.
+//
+// An empty statement is allowed, and may include whitespace. It is ignored.
+//
+// A statement begins with zero or more labels, optionally followed by a key symbol
+// which determines what kind of statement it is.
+// The key symbol determines the syntax of the rest of the statement.
+// If the symbol begins with a dot ‘.’ then the statement is an assembler directive: typically valid for any computer. If the symbol begins with a letter the statement is an assembly language instruction: it assembles into a machine language instruction. Different versions of as for different computers recognize different instructions. In fact, the same symbol may represent a different instruction in a different computer’s assembly language.
+//
+// A label is a symbol immediately followed by a colon (:).
+// Whitespace before a label or after a colon is permitted, but you may not have whitespace between a label’s symbol and its colon. See Labels.
+func parseStmt() *statement {
+	if idx == len(source) {
+		return nil // EOF
 	}
-}
-
-
-func parseTextBody(tokens []*token) {
-
+	skipWhitespaces()
+	if source[idx] == '\n' {
+		idx++
+		// an empty statement
+		return &statement{}
+	}
+	var stmt = &statement{}
+	symbol := trySymbol()
+	if symbol == "" {
+		return stmt
+	}
+	if source[idx] == ':' {
+		// this symbol is a label
+		stmt.labelSymbol = symbol
+		idx++
+		skipWhitespaces()
+		if source[idx] == '\n' {
+			idx++
+			// an empty statement
+			return stmt
+		}
+		stmt.keySymbol = trySymbol()
+	} else {
+		// this symbol is the key symbol in this statement
+		stmt.keySymbol = symbol
+	}
+	var args []byte
+	for ; source[idx] != '\n'; idx++ {
+		if source[idx] == '#' {
+			idx++
+			// Anything from a line comment character up to the next newline is considered a comment and is ignored.
+			// The line comment character is target specific, and some targets multiple comment characters.
+			skipLineComment()
+			return stmt
+		}
+		args = append(args, source[idx])
+	}
+	stmt.args = string(args)
+	idx++
+	return stmt
 }
 
 // GAS Manual: https://sourceware.org/binutils/docs-2.37/as.html
-func parse(tokens []*token) {
-	tok := tokens[0]
-	switch {
-	case tok.raw == ".": // directive or label
-		switch {
-		case tokens[1].raw == "text": // .text
-			parseTextBody(tokens[3:])
-		case tokens[1].raw == "data": // .data
-			parseDataSection(tokens[3:])
-			//dataBody := parseDataBody()
-		default:
+func parse() []*statement {
+	var stmts []*statement
+	for {
+		stmt := parseStmt()
+		if stmt == nil {
+			return stmts
 		}
+		//println(stmt)
+		stmts = append(stmts, stmt)
 	}
-/*
-	 */
+}
+
+func main() {
+	var err error
+	source, err = os.ReadFile("/dev/stdin")
+	if err != nil {
+		panic(err)
+	}
+	stmts := parse()
+	for _, stmt := range stmts {
+		fmt.Printf("%16s:%16s, %16s\n", stmt.labelSymbol, stmt.keySymbol, stmt.args)
+	}
 	return
+/*
+	tokens := tokenize()
 	for _, tok := range tokens {
 		if tok == nil {
 			panic("nil token")
 		}
 
-		fmt.Printf("%s \"%s\"\n", tok.typ, tok.raw)
+		if tok.typ == "newline" {
+			fmt.Printf("  EOL.\n")
+		} else {
+			fmt.Printf("[%s] \"%s\",", tok.typ, tok.raw)
+		}
 	}
-
-}
-
-func main() {
-	src, err := os.ReadFile("/dev/stdin")
-	if err != nil {
-		panic(err)
-	}
-	source = src
-	tokens := tokenize()
+	panic("STOP after tokenize")
 	parse(tokens)
+
+ */
 	return
 	makeDataSection()
 	makeSymbolTable()
