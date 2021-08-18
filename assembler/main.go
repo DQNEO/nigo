@@ -1,9 +1,158 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"unsafe"
 )
+
+type token struct {
+	typ string
+	raw string
+}
+
+func isIdent(ch byte) bool{
+	switch  {
+	case ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'):
+		return true
+	case '0' <= ch && ch <= '9':
+		return true
+	case ch == '_':
+		return true
+	}
+	return false
+}
+
+func peekCh() byte {
+	if byteIndex == len(source) {
+		return 255
+	}
+	return source[byteIndex]
+}
+
+func readCh() byte {
+	if byteIndex == len(source) {
+		return 255
+	}
+	ch := source[byteIndex]
+	byteIndex++
+	return ch
+}
+
+func readRegi() string {
+	var buf []byte
+	for {
+		ch := peekCh()
+		if isIdent(ch) {
+			buf = append(buf, ch)
+			byteIndex++
+		} else {
+			return string(buf)
+		}
+	}
+}
+
+func readIdent(first byte) string {
+	var buf []byte  = []byte{first}
+	for {
+		ch := peekCh()
+		if isIdent(ch) {
+			buf = append(buf, ch)
+			byteIndex++
+		} else {
+			return string(buf)
+		}
+	}
+}
+
+func readNumber(first byte) string {
+	var buf []byte  = []byte{first}
+	for {
+		ch := peekCh()
+		if ('0' <= ch && ch <= '9') || ch == 'x' {
+			buf = append(buf, ch)
+			byteIndex++
+		} else {
+			return string(buf)
+		}
+	}
+}
+
+var source []byte
+var byteIndex int
+
+func tokenize() []*token {
+	var tokens []*token
+	for  {
+		ch := readCh()
+		fmt.Println("byte:", ch)
+		var tok *token
+		switch  {
+		case ch == 255:
+			fmt.Println("EOF")
+			return tokens
+		case ch == ' ':
+			continue
+		case ch == '\n':
+			tok = &token{
+			typ: "newline",
+			raw: "",
+			}
+		case ch == '%':
+			regi := readRegi()
+			tok = &token{
+				typ: "regi",
+				raw: regi,
+			}
+		case ch == ':':
+			tok = &token{
+				typ: "punct",
+				raw: ":",
+			}
+/*
+		case ch == '.':
+			// keyword (".data" or ".text) or punct
+			dotstring := readIdent(ch)
+			tok = &token{
+				typ: "dotstring",
+				raw: dotstring,
+			}
+
+ */
+		case ch == '.', ch == ',', ch == '(', ch ==')':
+			tok = &token{
+				typ: "punct",
+				raw: ".",
+			}
+		case ch == '$':
+			n := readNumber(ch)
+			tok = &token{
+				typ: "dolnum",
+				raw: n,
+			}
+		case '0' <= ch && ch <= '9':
+			n := readNumber(ch)
+			tok = &token{
+				typ: "number",
+				raw: n,
+			}
+		case isIdent(ch):
+			ident := readIdent(ch)
+			tok = &token{
+				typ: "ident",
+				raw: ident,
+			}
+		default:
+			panic(ch)
+		}
+		if tok != nil {
+			tokens = append(tokens, tok)
+		}
+	}
+
+	return tokens
+}
+
 
 // ELF format
 // see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
@@ -490,7 +639,84 @@ func makeShStrTab() {
 	s_shstrtab.contents = data
 
 }
+
+func expect(bol bool) {
+	if !bol {
+		panic("expect failure")
+	}
+}
+
+type AstDataBody struct {
+	kind *token // ".quad"
+	val *token  // "0x123"
+}
+
+func parseDataContents(tokens []*token) (*AstDataBody, []*token) {
+	expect(tokens[0].raw == ".")
+	expect(tokens[1].typ == "ident") // "quad" or something
+
+	return &AstDataBody{
+		kind: tokens[1],
+		val:  tokens[2],
+	}, tokens[3:]
+
+}
+
+func parseDataSection(tokens []*token) {
+	fmt.Printf("token=%+v\n", tokens[0])
+	tok := tokens[0]
+	switch {
+	case tok.typ == "ident":
+		expect(tokens[1].raw == ":")
+		expect(tokens[2].typ == "newline")
+		astDataBody , tks := parseDataContents(tokens[3:])
+		tokens = tks
+		fmt.Printf("astDataBody=%+v\n", astDataBody)
+	default:
+		panic("STOP")
+	}
+}
+
+
+func parseTextBody(tokens []*token) {
+
+}
+
+func parse(tokens []*token) {
+	tok := tokens[0]
+	switch {
+	case tok.raw == ".": // directive or label
+		switch {
+		case tokens[1].raw == "text": // .text
+			parseTextBody(tokens[3:])
+		case tokens[1].raw == "data": // .data
+			parseDataSection(tokens[3:])
+			//dataBody := parseDataBody()
+		default:
+		}
+	}
+/*
+	 */
+	return
+	for _, tok := range tokens {
+		if tok == nil {
+			panic("nil token")
+		}
+
+		fmt.Printf("%s \"%s\"\n", tok.typ, tok.raw)
+	}
+
+}
+
 func main() {
+	src, err := os.ReadFile("/dev/stdin")
+	if err != nil {
+		panic(err)
+	}
+	source = src
+	tokens := tokenize()
+	parse(tokens)
+	return
 	makeDataSection()
 	makeSymbolTable()
 	makeStrTab()
