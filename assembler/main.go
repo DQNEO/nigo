@@ -682,6 +682,7 @@ func parseTextBody(tokens []*token) {
 
 }
 
+// GAS Manual: https://sourceware.org/binutils/docs-2.37/as.html
 func parse(tokens []*token) {
 	tok := tokens[0]
 	switch {
