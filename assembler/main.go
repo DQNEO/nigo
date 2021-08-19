@@ -35,10 +35,7 @@ func peekCh() byte {
 // Whitespace is used to separate symbols, and to make programs neater for people to read.
 // Unless within character constants (see Character Constants), any whitespace means the same as exactly one space.
 func skipWhitespaces() {
-	for  {
-		if idx == len(source) {
-			return
-		}
+	for idx < len(source) && source[idx] != '\n' {
 		ch := source[idx]
 		if ch == ' ' || ch == '\t' {
 			idx++
@@ -50,14 +47,11 @@ func skipWhitespaces() {
 
 func skipLineComment() {
 	for  {
-		if idx == len(source) {
-			return
-		}
 		ch := source[idx]
-		idx++
 		if ch == '\n' {
 			return
 		}
+		idx++
 	}
 }
 

@@ -1,27 +1,26 @@
 package main
 
 import (
+	"github.com/DQNEO/babygo/lib/strconv"
 	"os"
 	"fmt"
 )
 
-func parseInstruction(keySymbol string) string {
-	if keySymbol[0] == '.' {
-		// directive
-	} else {
-		// instruction
-	}
+func parseArgs(keySymbol string) string {
+	//if keySymbol[0] == '.' {
+	//	// directive
+	//} else {
+	//	// instruction
+	//}
 
 	var buf []byte
-	for ; source[idx] != '\n'; idx++ {
-		if source[idx] == '#' {
-			idx++
-			// Anything from a line comment character up to the next newline is considered a comment and is ignored.
-			// The line comment character is target specific, and some targets multiple comment characters.
-			skipLineComment()
-			break
+	for ; !atEOL();{
+		ch := source[idx]
+		if ch == '\n' {
+			panic("SHOULD NOT REACH HERE")
 		}
-		buf = append(buf, source[idx])
+		buf = append(buf, ch)
+		idx++
 	}
 	return string(buf)
 }
@@ -38,10 +37,38 @@ func trySymbol() string {
 
 var source []byte
 var idx int
+var lineno int = 1
+
 type statement struct {
+	empty bool
 	labelSymbol string
 	keySymbol string
 	args string
+}
+
+var emptyStatement = &statement{}
+
+func atEOL() bool {
+	return source[idx] == '\n' || source[idx] == '#'
+}
+
+func parseFail(msg string) {
+	panic(msg + " at line " + strconv.Itoa(lineno))
+}
+
+func assert(bol bool) {
+	if !bol {
+		parseFail("assert failed")
+	}
+}
+
+func consumeEOL() {
+	if source[idx] == '#' {
+		skipLineComment()
+	}
+	assert(source[idx] == '\n')
+	idx++
+	lineno++
 }
 
 // https://sourceware.org/binutils/docs-2.37/as.html#Statements
@@ -62,57 +89,65 @@ type statement struct {
 // A label is a symbol immediately followed by a colon (:).
 // Whitespace before a label or after a colon is permitted, but you may not have whitespace between a label’s symbol and its colon. See Labels.
 func parseStmt() *statement {
-	if idx == len(source) {
-		return nil // EOF
-	}
 	skipWhitespaces()
-	if source[idx] == '\n' {
-		idx++
-		// an empty statement
-		return &statement{}
+	if atEOL() {
+		consumeEOL()
+		return emptyStatement
 	}
 	var stmt = &statement{}
 	symbol := trySymbol()
 	if symbol == "" {
-		return stmt
+		assert(atEOL())
+		consumeEOL()
+		return emptyStatement
 	}
+
 	var keySymbol string
+
 	if source[idx] == ':' {
 		// this symbol is a label
 		stmt.labelSymbol = symbol
-		idx++
 		skipWhitespaces()
-		if source[idx] == '\n' {
-			idx++
-			// an empty statement
+		if atEOL() {
+			consumeEOL()
 			return stmt
 		}
-		keySymbol =  trySymbol()
+		keySymbol = trySymbol()
+		if len(keySymbol) == 0 {
+			skipWhitespaces()
+			assert(atEOL())
+			consumeEOL()
+			return stmt
+		}
 	} else {
 		// this symbol is the key symbol in this statement
 		keySymbol = symbol
 	}
 	stmt.keySymbol = keySymbol
+
+	skipWhitespaces()
+	if atEOL() {
+		consumeEOL()
+		return stmt
+	}
+
 	var args string
 	//if keySymbol != "" {
-		args = parseInstruction(keySymbol)
+		args = parseArgs(keySymbol)
 	//}
 	stmt.args = args
-	idx++
+	consumeEOL()
 	return stmt
 }
 
 // GAS Manual: https://sourceware.org/binutils/docs-2.37/as.html
 func parse() []*statement {
 	var stmts []*statement
-	for {
-		stmt := parseStmt()
-		if stmt == nil {
-			return stmts
-		}
-		//println(stmt)
-		stmts = append(stmts, stmt)
+	for idx < len(source) {
+		s := parseStmt()
+		stmts = append(stmts, s)
 	}
+	return stmts
 }
 
 func debugParser() {
@@ -122,10 +157,12 @@ func debugParser() {
 		panic(err)
 	}
 	stmts := parse()
-	fmt.Printf("%16s:|%16s|%16s\n", "LABEL", "DIRECTIVE", "ARGS")
-	for _, stmt := range stmts {
-		fmt.Printf("%16s:|%16s|%16s\n", stmt.labelSymbol, stmt.keySymbol, stmt.args)
+	fmt.Printf("%3s|%30s:|%30s|%30s\n", "NO", "LABEL", "DIRECTIVE", "ARGS")
+	for i, stmt := range stmts {
+		if stmt == emptyStatement {
+			continue
+		}
+		fmt.Printf("%03d|%29s: |%30s|%30s\n", i+1, stmt.labelSymbol, stmt.keySymbol, stmt.args)
 	}
-
 }
 
