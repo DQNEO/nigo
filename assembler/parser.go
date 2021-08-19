@@ -6,6 +6,10 @@ import (
 	"fmt"
 )
 
+func isDirective(symbol string) bool {
+	return len(symbol) > 0 && symbol[0] == '.'
+}
+
 func parseArgs(keySymbol string) string {
 	//if keySymbol[0] == '.' {
 	//	// directive
@@ -40,7 +44,6 @@ var idx int
 var lineno int = 1
 
 type statement struct {
-	empty bool
 	labelSymbol string
 	keySymbol string
 	args string
@@ -150,13 +153,7 @@ func parse() []*statement {
 	return stmts
 }
 
-func debugParser() {
-	var err error
-	source, err = os.ReadFile("/dev/stdin")
-	if err != nil {
-		panic(err)
-	}
-	stmts := parse()
+func dumpStmts(stmts []*statement) {
 	fmt.Printf("%3s|%30s:|%30s|%30s\n", "NO", "LABEL", "DIRECTIVE", "ARGS")
 	for i, stmt := range stmts {
 		if stmt == emptyStatement {
@@ -164,5 +161,41 @@ func debugParser() {
 		}
 		fmt.Printf("%03d|%29s: |%30s|%30s\n", i+1, stmt.labelSymbol, stmt.keySymbol, stmt.args)
 	}
+}
+
+type none string
+
+func debugParser() {
+	var err error
+	source, err = os.ReadFile("/dev/stdin")
+	if err != nil {
+		panic(err)
+	}
+	stmts := parse()
+	insts := make(map[string]none)
+	dircs := make(map[string]none)
+	labels := make(map[string]none)
+
+	for _, s := range stmts {
+		if isDirective(s.keySymbol) {
+			dircs[s.keySymbol] = ""
+		} else {
+			insts[s.keySymbol] = ""
+		}
+		labels[s.labelSymbol] = ""
+	}
+
+	for k, _ := range labels {
+		fmt.Printf("%v\n", k)
+	}
+	fmt.Println("------------------")
+	for k, _ := range dircs {
+		fmt.Printf("%v\n", k)
+	}
+	fmt.Println("------------------")
+	for k, _ := range insts {
+		fmt.Printf("%v\n", k)
+	}
+	//dumpStmts(stmts)
 }
 
