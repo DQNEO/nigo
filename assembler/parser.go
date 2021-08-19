@@ -1,40 +1,254 @@
 package main
 
 import (
+	"fmt"
 	"github.com/DQNEO/babygo/lib/strconv"
 	"os"
-	"fmt"
+	"strings"
 )
+
+
+// https://sourceware.org/binutils/docs-2.37/as.html#Symbol-Names
+// Symbol names begin with a letter or with one of ‘._’.
+// Symbol names do not start with a digit.
+//  An exception to this rule is made for Local Labels.
+func isSymbolBeginning(ch byte) bool {
+	return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ch == '.' || ch == '_'
+}
+
+// On most machines, you can also use $ in symbol names.
+func isSymbolLetter(ch byte) bool{
+	return isSymbolBeginning(ch) || '0' <= ch && ch <= '9' || ch == '$'
+}
+
+func peekCh() byte {
+	if idx == len(source) {
+		return 255
+	}
+	return source[idx]
+}
+
+// https://sourceware.org/binutils/docs-2.37/as.html#Whitespace
+// Whitespace is one or more blanks or tabs, in any order.
+// Whitespace is used to separate symbols, and to make programs neater for people to read.
+// Unless within character constants (see Character Constants), any whitespace means the same as exactly one space.
+func skipWhitespaces() {
+	for idx < len(source) && source[idx] != '\n' {
+		ch := source[idx]
+		if ch == ' ' || ch == '\t' {
+			idx++
+			continue
+		}
+		return
+	}
+}
+
+func skipLineComment() {
+	for  {
+		ch := source[idx]
+		if ch == '\n' {
+			return
+		}
+		idx++
+	}
+}
+
+func readIndirection() (regi string) {
+	idx++
+	if source[idx] == '%' {
+		regi = readRegi()
+		assert(source[idx] == ')', "")
+		idx++
+
+	} else {
+		parseFail("TBI")
+	}
+	return regi
+}
+
+func expect(ch byte) {
+	if source[idx] != ch {
+		panic(fmt.Sprintf("[parser] %c is expected, but got %c at line %d", ch, source[idx], lineno))
+	}
+	idx++
+}
+
+func isAlphabet(ch byte) bool {
+	return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z')
+}
+
+func readRegi() string {
+	expect('%')
+	var buf []byte
+	for {
+		ch := source[idx]
+		if isAlphabet(ch) {
+			idx++
+			buf = append(buf, ch)
+		} else {
+			return string(buf)
+		}
+	}
+}
+
+func readSymbol(first byte) string {
+	expect(first)
+	var buf []byte  = []byte{first}
+	for {
+		ch := source[idx]
+		if isSymbolLetter(ch) {
+			buf = append(buf, ch)
+			idx++
+		} else {
+			return string(buf)
+		}
+	}
+}
+
+func readStringLiteral() string {
+	expect('"')
+	var buf []byte
+	for {
+		ch := peekCh()
+		switch ch {
+		case '\\':
+			expect('\\')
+			ch := peekCh()
+			idx++
+			buf = append(buf, ch)
+			continue
+		case '"':
+			idx++
+			return string(buf)
+		default:
+			idx++
+			buf = append(buf, ch)
+		}
+	}
+}
+
+func parseArith() string {
+	n := readNumber()
+	ch := source[idx]
+	switch ch {
+	case '+','-','*','/':
+		idx++
+		n2 := readNumber()
+		return n + string(ch) + n2
+	default:
+		return n
+	}
+}
+
+func readNumber() string {
+	first := source[idx]
+	idx++
+	var buf []byte  = []byte{first}
+	for {
+		ch := peekCh()
+		if ('0' <= ch && ch <= '9') || ch == 'x' || ('a' <= ch && ch <= 'f') {
+			buf = append(buf, ch)
+			idx++
+		} else {
+			return string(buf)
+		}
+	}
+}
+
 
 func isDirective(symbol string) bool {
 	return len(symbol) > 0 && symbol[0] == '.'
 }
 
-func parseArgs(keySymbol string) string {
+func parseOperand() *operand {
+	skipWhitespaces()
+	ch := source[idx]
+	assert(ch != '\n', "")
+
+	switch {
+	case isSymbolBeginning(ch):
+		symbol := readSymbol(ch)
+		if source[idx] == '(' {
+			// indirection e.g. 24(%rbp)
+			regi := readIndirection()
+			return &operand{
+				string: fmt.Sprintf("indirect %s(%s)", symbol, regi),
+			}
+		} else {
+			// just a symbol
+			return  &operand{
+				string :string(symbol),
+			}
+		}
+	case ch == '"':
+		s := readStringLiteral()
+		return  &operand{
+			string :string("\"" + s + "\""),
+		}
+	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"e
+		n := parseArith()
+		if source[idx] == '(' {
+			// indirection e.g. 24(%rbp)
+			regi := readIndirection()
+			return &operand{
+				string: fmt.Sprintf("indirect %s(%s)", n, regi),
+			}
+		} else {
+			// just a number
+			return  &operand{
+				string :string(n),
+			}
+		}
+	case ch == '(':
+		regi := readIndirection()
+		return &operand{
+			string: fmt.Sprintf("indirect (%s)",  regi),
+		}
+	case ch == '$':
+		idx++
+		// "$123" "$-7"
+		n := readNumber()
+		return  &operand{
+			string :string(n),
+		}
+	case ch == '%':
+		regi := readRegi()
+		return  &operand{
+			string :string(regi),
+		}
+	default:
+		parseFail("default:buf=" + string(source[idx:idx+4]))
+	}
+	return nil
+}
+
+func parseOperands(keySymbol string) []*operand {
 	//if keySymbol[0] == '.' {
 	//	// directive
 	//} else {
 	//	// instruction
 	//}
-
-	var buf []byte
+	var operands []*operand
 	for ; !atEOL();{
-		ch := source[idx]
-		if ch == '\n' {
-			panic("SHOULD NOT REACH HERE")
+		op := parseOperand()
+		operands = append(operands, op)
+		skipWhitespaces()
+		if source[idx] == ',' {
+			idx++
+			continue
+		} else {
+			break
 		}
-		buf = append(buf, ch)
-		idx++
 	}
-	return string(buf)
+	return operands
 }
 
 func trySymbol() string {
 	first := source[idx]
-	idx++
 	if isSymbolBeginning(first) {
 		return readSymbol(first)
 	} else {
+		idx++
 		return ""
 	}
 }
@@ -43,10 +257,14 @@ var source []byte
 var idx int
 var lineno int = 1
 
+type operand struct {
+	string
+}
+
 type statement struct {
 	labelSymbol string
-	keySymbol string
-	args string
+	keySymbol   string
+	operands    []*operand
 }
 
 var emptyStatement = &statement{}
@@ -59,9 +277,9 @@ func parseFail(msg string) {
 	panic(msg + " at line " + strconv.Itoa(lineno))
 }
 
-func assert(bol bool) {
+func assert(bol bool, errorMsg string) {
 	if !bol {
-		parseFail("assert failed")
+		parseFail("assert failed: " + errorMsg)
 	}
 }
 
@@ -69,7 +287,10 @@ func consumeEOL() {
 	if source[idx] == '#' {
 		skipLineComment()
 	}
-	assert(source[idx] == '\n')
+	if idx == len(source) {
+		return
+	}
+	assert(source[idx] == '\n', "not newline, but got " + string(source[idx]))
 	idx++
 	lineno++
 }
@@ -99,8 +320,10 @@ func parseStmt() *statement {
 	}
 	var stmt = &statement{}
 	symbol := trySymbol()
+	//println("  got symbol " + symbol)
+	//println("(a) next char is  " + string(source[idx]) + ".")
 	if symbol == "" {
-		assert(atEOL())
+		assert(atEOL(), "not at EOL")
 		consumeEOL()
 		return emptyStatement
 	}
@@ -118,7 +341,7 @@ func parseStmt() *statement {
 		keySymbol = trySymbol()
 		if len(keySymbol) == 0 {
 			skipWhitespaces()
-			assert(atEOL())
+			assert(atEOL(), "not at EOL")
 			consumeEOL()
 			return stmt
 		}
@@ -129,16 +352,15 @@ func parseStmt() *statement {
 	stmt.keySymbol = keySymbol
 
 	skipWhitespaces()
+	//println("(b) next char is  " + string(source[idx]))
 	if atEOL() {
 		consumeEOL()
 		return stmt
 	}
 
-	var args string
-	//if keySymbol != "" {
-		args = parseArgs(keySymbol)
-	//}
-	stmt.args = args
+	//println("  parsing operands...")
+	operands := parseOperands(keySymbol)
+	stmt.operands = operands
 	consumeEOL()
 	return stmt
 }
@@ -146,20 +368,36 @@ func parseStmt() *statement {
 // GAS Manual: https://sourceware.org/binutils/docs-2.37/as.html
 func parse() []*statement {
 	var stmts []*statement
+	var i int = 1
 	for idx < len(source) {
+		//println(i, " reading...")
 		s := parseStmt()
+		dumpStmt(i, s)
 		stmts = append(stmts, s)
+		i++
 	}
 	return stmts
 }
 
+func dumpStmt(i int, stmt *statement) {
+	if stmt == emptyStatement {
+		fmt.Printf("%03d| *\n", i)
+	} else {
+		var ops []string
+		for _, o := range stmt.operands {
+			ops = append(ops, o.string)
+		}
+		fmt.Printf("%03d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
+	}
+
+}
 func dumpStmts(stmts []*statement) {
-	fmt.Printf("%3s|%30s:|%30s|%30s\n", "NO", "LABEL", "DIRECTIVE", "ARGS")
+	fmt.Printf("%3s|%29s: |%30s | %s\n", "NO", "LABEL", "DIRECTIVE", "ARGS")
 	for i, stmt := range stmts {
 		if stmt == emptyStatement {
 			continue
 		}
-		fmt.Printf("%03d|%29s: |%30s|%30s\n", i+1, stmt.labelSymbol, stmt.keySymbol, stmt.args)
+		dumpStmt(i, stmt)
 	}
 }
 
@@ -172,6 +410,11 @@ func debugParser() {
 		panic(err)
 	}
 	stmts := parse()
+
+
+	dumpStmts(stmts)
+	return
+
 	insts := make(map[string]none)
 	dircs := make(map[string]none)
 	labels := make(map[string]none)
@@ -196,6 +439,5 @@ func debugParser() {
 	for k, _ := range insts {
 		fmt.Printf("%v\n", k)
 	}
-	//dumpStmts(stmts)
 }
 
