@@ -19,7 +19,7 @@ func isSymbolBeginning(ch byte) bool {
 }
 
 // On most machines, you can also use $ in symbol names.
-func isSymbol(ch byte) bool{
+func isSymbolLetter(ch byte) bool{
 	return isSymbolBeginning(ch) || '0' <= ch && ch <= '9' || ch == '$'
 }
 
@@ -59,7 +59,7 @@ func readSymbol(first byte) string {
 	var buf []byte  = []byte{first}
 	for {
 		ch := peekCh()
-		if isSymbol(ch) {
+		if isSymbolLetter(ch) {
 			buf = append(buf, ch)
 			idx++
 		} else {
