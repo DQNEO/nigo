@@ -372,7 +372,6 @@ func parse() []*statement {
 	for idx < len(source) {
 		//println(i, " reading...")
 		s := parseStmt()
-		dumpStmt(i, s)
 		stmts = append(stmts, s)
 		i++
 	}
@@ -387,12 +386,13 @@ func dumpStmt(i int, stmt *statement) {
 		for _, o := range stmt.operands {
 			ops = append(ops, o.string)
 		}
-		fmt.Printf("%03d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
+		fmt.Printf("%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
 	}
 
 }
+
 func dumpStmts(stmts []*statement) {
-	fmt.Printf("%3s|%29s: |%30s | %s\n", "NO", "LABEL", "DIRECTIVE", "ARGS")
+	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
 	for i, stmt := range stmts {
 		if stmt == emptyStatement {
 			continue
@@ -401,7 +401,7 @@ func dumpStmts(stmts []*statement) {
 	}
 }
 
-type none string
+type none bool
 
 func debugParser() {
 	var err error
@@ -421,11 +421,11 @@ func debugParser() {
 
 	for _, s := range stmts {
 		if isDirective(s.keySymbol) {
-			dircs[s.keySymbol] = ""
+			dircs[s.keySymbol] = true
 		} else {
-			insts[s.keySymbol] = ""
+			insts[s.keySymbol] = true
 		}
-		labels[s.labelSymbol] = ""
+		labels[s.labelSymbol] = true
 	}
 
 	for k, _ := range labels {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"unsafe"
 )
@@ -225,13 +226,13 @@ var symbolTable = []*symbolTableEntry{
 		st_name:  0x01, // "myGlobalInt"
 		st_info:  0,
 		st_shndx: 0x03, // section ".data"
-		st_value: 0x0, // ?
+		st_value: 0x0, // address of the variable ?
 	},
 	&symbolTableEntry{
 		st_name:  0x0d, // "pGlobalInt"
 		st_info:  0,
 		st_shndx: 0x03, // section ".data"
-		st_value: 0x08, // ?
+		st_value: 0x08, // address of the variable ?
 	},
 	&symbolTableEntry{
 		st_name:  0x18, // "myfunc"
@@ -247,19 +248,10 @@ var symbolTable = []*symbolTableEntry{
 	},
 	&symbolTableEntry{
 		st_name:  0x27, // "_start"
-		st_info:  0x10, // ?
+		st_info:  0x10, // STT_LOOS
 		st_shndx: 0x01, // section 1 ".txt"
 		st_value: 0,
 	},
-}
-
-// contents of .strtab
-var symbolNames = []string{
-	"myGlobalInt",
-	"pGlobalInt",
-	"myfunc",
-	"myfunc2",
-	"_start",
 }
 
 // contents of .rela.text
@@ -473,7 +465,7 @@ func makeSymbolTable() {
 
 func makeStrTab() {
 	var data []byte = []byte{0x00}
-	for _, name := range symbolNames {
+	for _, name := range p.allSymbolNames {
 		buf := append([]byte(name), 0x00)
 		data = append(data, buf...)
 	}
@@ -490,10 +482,137 @@ func makeShStrTab() {
 	s_shstrtab.contents = data
 }
 
+type symbolTableStruct struct {
+	dataSymbols []string
+	localfuncSymbols []string
+	globalfuncSymbols []string
+}
+
+type programStruct struct {
+	textStmts []*statement
+	dataStmts []*statement
+	symStruct symbolTableStruct
+	allSymbolNames []string // contents of .strtab
+}
+
+var p = &programStruct{}
+var symbols []string
+
+var mpGlobals = make(map[string]none)
+
+func analyze(stmts []*statement) {
+	var currentSection string
+	for _, s := range stmts {
+		if s == emptyStatement {
+			continue
+		}
+		switch s.keySymbol {
+		case ".data":
+			currentSection = ".data"
+			continue
+		case ".text":
+			currentSection = ".text"
+			continue
+		case ".global":
+			mpGlobals[s.operands[0].string] = true
+		}
+
+		switch currentSection {
+		case ".data":
+			p.dataStmts = append(p.dataStmts, s)
+			if s.labelSymbol != "" {
+				symbols = append(symbols, s.labelSymbol)
+				p.symStruct.dataSymbols = append(p.symStruct.dataSymbols, s.labelSymbol)
+			}
+		case ".text":
+			p.textStmts = append(p.textStmts, s)
+			if s.labelSymbol != "" {
+				symbols = append(symbols, s.labelSymbol)
+				if mpGlobals[s.labelSymbol] {
+					p.symStruct.globalfuncSymbols = append(p.symStruct.globalfuncSymbols, s.labelSymbol)
+				} else {
+					p.symStruct.localfuncSymbols = append(p.symStruct.localfuncSymbols, s.labelSymbol)
+				}
+			}
+		default:
+		}
+
+	}
+
+	var symNames []string
+	for _, sym := range p.symStruct.dataSymbols {
+		symNames = append(symNames, sym)
+	}
+	for _, sym := range p.symStruct.localfuncSymbols {
+		symNames = append(symNames, sym)
+	}
+	for _, sym := range p.symStruct.globalfuncSymbols {
+		symNames = append(symNames, sym)
+	}
+	p.allSymbolNames = symNames
+}
+
+func translate(s *statement) []byte {
+	switch s.keySymbol {
+	case "nop":
+		return []byte{0x90}
+	case "call":
+		return []byte{0xe8}
+	case "movq":
+		return []byte{0x48, 0x8b}
+	case "addq":
+		return []byte{0x48, 0x01}
+	case "retq":
+		return []byte{0xc3}
+	case "syscall":
+		return []byte{0x0f, 0x05}
+	default:
+		return nil
+	}
+}
+
+func assembleCode(ss []*statement) []byte {
+	var code []byte
+	for _, s := range ss {
+		buf := translate(s)
+		code = append(code, buf...)
+	}
+	return code
+}
+
+func dumpProgram(p *programStruct) {
+	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
+	for _, stmt := range p.dataStmts {
+		dumpStmt(0, stmt)
+	}
+	for _, stmt := range p.textStmts {
+		dumpStmt(0, stmt)
+	}
+}
+
+func dumpCode(code []byte) {
+	fmt.Printf("code\n")
+	for _, c := range code {
+		fmt.Printf("%x ", c)
+	}
+	fmt.Println()
+}
 
 func main() {
-	debugParser()
-	return
+	//debugParser()
+	var err error
+	source, err = os.ReadFile("/dev/stdin")
+	if err != nil {
+		panic(err)
+	}
+	stmts := parse()
+	analyze(stmts)
+	//dumpProgram(p)
+	code := assembleCode(p.textStmts)
+	_ = code
+	//dumpCode(code)
+	//fmt.Printf("symbols=%+v\n",p.symStruct)
+
 	makeDataSection()
 	makeSymbolTable()
 	makeStrTab()
@@ -522,6 +641,7 @@ func main() {
 	// Output
 	output(&elfHeader, sectionsOrderByContents, sht)
 }
+
 
 func output(elfHeader *Elf64_Ehdr, sections []*section, sht *sectionHeaderTable) {
 	// Part 1: Write ELF Header

@@ -2,8 +2,8 @@
 
 all: gnu gnu.o.xxd my.o.xxd gnu.readelf
 
-my.o: main.go
-	go run $< > $@
+my.o: main.go parser.go gnu.s
+	go run main.go parser.go < gnu.s > $@
 
 # test by GNU tools
 gnu.o: gnu.s
