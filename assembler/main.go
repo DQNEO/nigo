@@ -180,40 +180,6 @@ var sectionsOrderByContents = []*section{
 	s_shstrtab,  // .shstrtab
 }
 
-// ## .text (machine code)
-var text []byte = []byte{
-	// .text section
-	// _start:
-	0x90, // nop * 8
-	0x90,
-	0x90,
-	0x90,
-	0x90,
-	0x90,
-	0x90,
-	0x90,
-	0xe8, 0x23, 0x00, 0x00, 0x00, // call myfunc
-	0xe8, 0x1f, 0x00, 0x00, 0x00, // call myfunc2
-	0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00, // movq myGlobalInt(%rip), %rax
-	0x48, 0x8b, 0x00, // movq (%rax),%rax
-	0x48, 0xc7, 0xc7, 0x20, 0x00, 0x00, 0x00, // movq %rdi <- $0x20
-	0x48, 0x01, 0xc7, // addq %rax, %rdi
-	0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // movq %rax <- $0x3c
-
-	0x0f, 0x05, // syscall
-
-	0xc3, // retq
-	// myfunc:
-	0xc3, // retq
-	// myfunc2:
-	0xc3, // retq
-	0xc3, // retq
-	0xc3, // retq
-	0xc3, // retq
-	0xc3, // retq
-	0xc3, // retq
-}
-
 // .symtab
 var symbolTable = []*symbolTableEntry{
 	&symbolTableEntry{ // NULL entry
@@ -368,7 +334,7 @@ var sh_shstrtab *sectionHeader = &sectionHeader{
 
 var s_text = &section{
 	header:   sh_text,
-	contents: text,
+	contents: nil,
 }
 
 var s_rela_text = &section{
@@ -604,23 +570,46 @@ func translateData(s *statement) []byte {
 	return nil
 }
 
-func translate(s *statement) []byte {
+var movqIdx int
+var movq0 = []byte{0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00,}
+var movq1 = []byte{0x48, 0x8b, 0x00,}
+var movq2 = []byte{0x48, 0xc7, 0xc7, 0x20, 0x00, 0x00, 0x00,}
+var movq3 = []byte{0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00,}
+var insts = [][]byte{
+	movq0, movq1, movq2, movq3,
+}
+
+func translateCode(s *statement) []byte {
+	var r []byte
 	switch s.keySymbol {
 	case "nop":
-		return []byte{0x90}
-	case "call":
-		return []byte{0xe8}
+		r = []byte{0x90}
+	case "callq":
+		var dst byte
+		switch s.operands[0].string {
+		case "myfunc":
+			dst = 0x23
+		case "myfunc2":
+			dst = 0x1f
+		default:
+			panic("ERROR")
+		}
+		r =  []byte{0xe8, dst, 0, 0, 0}
 	case "movq":
-		return []byte{0x48, 0x8b}
+		r = insts[movqIdx]
+		movqIdx++
 	case "addq":
-		return []byte{0x48, 0x01}
+		r = []byte{0x48, 0x01, 0xc7}
 	case "retq":
-		return []byte{0xc3}
+		r = []byte{0xc3}
 	case "syscall":
-		return []byte{0x0f, 0x05}
+		r = []byte{0x0f, 0x05}
 	default:
-		return nil
+		//return nil
 	}
+	//fmt.Printf("[debug] %s %s ", s.keySymbol, s.operands)
+	//fmt.Printf("=> %x \n", r)
+	return r
 }
 
 var addresses = map[string]uintptr{
@@ -634,7 +623,7 @@ var addresses = map[string]uintptr{
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
-		buf := translate(s)
+		buf := translateCode(s)
 		code = append(code, buf...)
 	}
 	return code
@@ -678,8 +667,7 @@ func main() {
 	stmts := parse()
 	analyze(stmts)
 	//dumpProgram(p)
-	code := assembleCode(p.textStmts)
-	_ = code
+	s_text.contents = assembleCode(p.textStmts)
 	//dumpCode(code)
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 
