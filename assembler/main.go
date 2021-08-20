@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"os"
 	"unsafe"
 )
@@ -206,12 +208,6 @@ var text []byte = []byte{
 	0xc3, // retq
 	0xc3, // retq
 	0xc3, // retq
-}
-
-// .data
-var data = []byte{
-	0x0a,0,0,0,0,0,0,0, // .quad 0x0a (8 bytes)
-	0,0,0,0,0,0,0,0, // zero ?
 }
 
 // .symtab
@@ -423,7 +419,6 @@ func calcOffsetOfSection(s *section, prev *section) {
 }
 
 func makeDataSection() {
-	s_data.contents = data
 }
 
 func makeSymbolTable() {
@@ -588,6 +583,30 @@ func analyze(stmts []*statement) {
 	symbolTable[len(symbolTable)-1].st_info = 0x10 // STT_LOOS
 }
 
+func translateData(s *statement) []byte {
+	switch s.keySymbol {
+	case ".quad":
+		rawVal := s.operands[0].string
+		var i int64
+		if strings.HasPrefix(rawVal, "0x") {
+			var err error
+			i, err = strconv.ParseInt(rawVal, 0, 0)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			// TBI
+		}
+		buf := (*[8]byte)(unsafe.Pointer(&i))
+		return buf[:]
+	case "": // label
+		//panic("empty keySymbol:" + s.labelSymbol)
+	default:
+		panic("TBI:"+ s.keySymbol)
+	}
+	return nil
+}
+
 func translate(s *statement) []byte {
 	switch s.keySymbol {
 	case "nop":
@@ -615,6 +634,16 @@ func assembleCode(ss []*statement) []byte {
 	}
 	return code
 }
+
+func assembleData(ss []*statement) []byte {
+	var data []byte
+	for _, s := range ss {
+		buf := translateData(s)
+		data = append(data, buf...)
+	}
+	return data
+}
+
 
 func dumpProgram(p *programStruct) {
 	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
@@ -649,7 +678,9 @@ func main() {
 	//dumpCode(code)
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 
-	makeDataSection()
+	data := assembleData(p.dataStmts)
+	s_data.contents = data
+
 	makeSymbolTable()
 
 	makeShStrTab()
