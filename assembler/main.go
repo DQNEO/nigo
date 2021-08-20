@@ -222,36 +222,6 @@ var symbolTable = []*symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
 		st_shndx: 0x03, // section ".data"
 	},
-	&symbolTableEntry{
-		st_name:  0x01, // "myGlobalInt"
-		st_info:  0,
-		st_shndx: 0x03, // section ".data"
-		st_value: 0x0, // address of the variable ?
-	},
-	&symbolTableEntry{
-		st_name:  0x0d, // "pGlobalInt"
-		st_info:  0,
-		st_shndx: 0x03, // section ".data"
-		st_value: 0x08, // address of the variable ?
-	},
-	&symbolTableEntry{
-		st_name:  0x18, // "myfunc"
-		st_info:  0,
-		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x30, // address of myfunc label
-	},
-	&symbolTableEntry{
-		st_name:  0x1f, // "myfunc2"
-		st_info:  0,
-		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0x31, // address of myfunc2 label
-	},
-	&symbolTableEntry{
-		st_name:  0x27, // "_start"
-		st_info:  0x10, // STT_LOOS
-		st_shndx: 0x01, // section 1 ".txt"
-		st_value: 0,
-	},
 }
 
 // contents of .rela.text
@@ -463,13 +433,17 @@ func makeSymbolTable() {
 	}
 }
 
-func makeStrTab() {
+func makeStrTab() []byte {
+	var nameOffset uint32
 	var data []byte = []byte{0x00}
-	for _, name := range p.allSymbolNames {
-		buf := append([]byte(name), 0x00)
+	nameOffset++
+	for _, sym := range p.allSymbolNames {
+		sym.nameOffset = nameOffset
+		buf := append([]byte(sym.name), 0x00)
 		data = append(data, buf...)
+		nameOffset += uint32(len(buf))
 	}
-	s_strtab.contents = data
+	return data
 }
 
 func makeShStrTab() {
@@ -488,11 +462,18 @@ type symbolTableStruct struct {
 	globalfuncSymbols []string
 }
 
+type symbolStruct struct {
+	name       string
+	nameOffset uint32
+	section    string
+	address uintptr
+}
+
 type programStruct struct {
 	textStmts []*statement
 	dataStmts []*statement
 	symStruct symbolTableStruct
-	allSymbolNames []string // contents of .strtab
+	allSymbolNames []*symbolStruct // => contents of .strtab
 }
 
 var p = &programStruct{}
@@ -539,17 +520,72 @@ func analyze(stmts []*statement) {
 
 	}
 
-	var symNames []string
+	var addresses = map[string]uintptr{
+		"myGlobalInt": 0x0,
+		"pGlobalInt": 0x08,
+		"myfunc": 0x30,
+		"myfunc2": 0x31,
+		"_start": 0,
+	}
+	var allSymbols []*symbolStruct
 	for _, sym := range p.symStruct.dataSymbols {
-		symNames = append(symNames, sym)
+		addr, ok := addresses[sym]
+		if !ok {
+			panic("address not found")
+		}
+		allSymbols = append(allSymbols, &symbolStruct{
+			name:    sym,
+			section: ".data",
+			address: addr,
+		})
 	}
 	for _, sym := range p.symStruct.localfuncSymbols {
-		symNames = append(symNames, sym)
+		addr, ok := addresses[sym]
+		if !ok {
+			panic("address not found")
+		}
+		allSymbols = append(allSymbols, &symbolStruct{
+			name:    sym,
+			section: ".text",
+			address: addr,
+		})
 	}
 	for _, sym := range p.symStruct.globalfuncSymbols {
-		symNames = append(symNames, sym)
+		addr, ok := addresses[sym]
+		if !ok {
+			panic("address not found")
+		}
+		allSymbols = append(allSymbols, &symbolStruct{
+			name:    sym,
+			section: ".text",
+			address: addr,
+		})
 	}
-	p.allSymbolNames = symNames
+	p.allSymbolNames = allSymbols
+
+	s_strtab.contents = makeStrTab()
+
+	for _, sym := range allSymbols {
+		var shndx uint16
+		switch sym.section {
+		case ".text":
+			shndx = 0x01
+		case ".data":
+			shndx = 0x03
+		default:
+			panic("TBI")
+		}
+		e := &symbolTableEntry{
+			st_name:  sym.nameOffset,
+			st_info:  0,
+			st_other: 0,
+			st_shndx: shndx,
+			st_value: sym.address,
+		}
+		symbolTable = append(symbolTable, e)
+		//fmt.Printf("e=%#v\n", e)
+	}
+	symbolTable[len(symbolTable)-1].st_info = 0x10 // STT_LOOS
 }
 
 func translate(s *statement) []byte {
@@ -615,7 +651,7 @@ func main() {
 
 	makeDataSection()
 	makeSymbolTable()
-	makeStrTab()
+
 	makeShStrTab()
 
 	// Calculates offset and zero padding
