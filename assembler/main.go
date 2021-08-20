@@ -112,14 +112,14 @@ type symbolTableEntry struct {
 //           } Elf64_Shdr;
 
 type sectionHeader struct {
-	sh_name uint32 // 4
-	sh_type uint32  // 8
-	sh_flag uintptr // 16
-	sh_addr uintptr // 24
-	sh_offst uintptr // 32
-	sh_size uintptr // 40
-	sh_link uint32 // 44
-	sh_info uint32 // 48
+	sh_name   uint32  // 4
+	sh_type   uint32  // 8
+	sh_flags  uintptr // 16
+	sh_addr   uintptr // 24
+	sh_offset uintptr // 32
+	sh_size   uintptr // 40
+	sh_link   uint32  // 44
+	sh_info   uint32  // 48
 
 	// Some sections have address alignment constraints.  If a
 	// section holds a doubleword, the system must ensure
@@ -196,9 +196,9 @@ var text []byte = []byte{
 	0xe8, 0x1f, 0x00, 0x00, 0x00, // call myfunc2
 	0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00, // movq myGlobalInt(%rip), %rax
 	0x48, 0x8b, 0x00, // movq (%rax),%rax
-	0x48, 0xc7, 0xc7, 0x20, 0x00, 0x00, 0x00, // movq $0x20, %rdi
+	0x48, 0xc7, 0xc7, 0x20, 0x00, 0x00, 0x00, // movq %rdi <- $0x20
 	0x48, 0x01, 0xc7, // addq %rax, %rdi
-	0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // movq $0x3c, %rax
+	0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, // movq %rax <- $0x3c
 
 	0x0f, 0x05, // syscall
 
@@ -272,7 +272,7 @@ var sh_null = &sectionHeader{}
 var sh_text = &sectionHeader{
 	sh_name:      0x20, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
-	sh_flag:      0x06, // SHF_ALLOC|SHF_EXECINSTR
+	sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
@@ -282,8 +282,8 @@ var sh_text = &sectionHeader{
 
 var sh_rela_text = &sectionHeader{
 	sh_name:      0x1b, // ".rela.text"
-	sh_type:      0x04, // SHT_RELA ?
-	sh_flag:      0x40, // * ??
+	sh_type:      0x04, // SHT_RELA
+	sh_flags:     0x40, // * ??
 	sh_link:      0x06,
 	sh_info:      0x01,
 	sh_addralign: 0x08,
@@ -293,7 +293,7 @@ var sh_rela_text = &sectionHeader{
 var sh_data = &sectionHeader{
 	sh_name:      0x2b, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
-	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
+	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
@@ -303,8 +303,8 @@ var sh_data = &sectionHeader{
 
 var sh_rela_data = &sectionHeader{
 	sh_name:      0x26, // ".rela.data"
-	sh_type:      0x04, // SHT_RELA ?
-	sh_flag:      0x40, // I ??
+	sh_type:      0x04, // SHT_RELA
+	sh_flags:     0x40, // I ??
 	sh_link:      0x06,
 	sh_info:      0x03,
 	sh_addralign: 0x08,
@@ -314,7 +314,7 @@ var sh_rela_data = &sectionHeader{
 var sh_bss = &sectionHeader{
 	sh_name:      0x31, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
-	sh_flag:      0x03, // SHF_WRITE|SHF_ALLOC
+	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
@@ -326,7 +326,7 @@ var sh_bss = &sectionHeader{
 var sh_symtab = &sectionHeader{
 	sh_name:      0x01, // ".symtab"
 	sh_type:      0x02, // SHT_SYMTAB
-	sh_flag:      0,
+	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0x07,
 	sh_info:      0x06,
@@ -346,7 +346,7 @@ var sh_symtab = &sectionHeader{
 var sh_strtab = &sectionHeader{
 	sh_name:      0x09, // ".strtab"
 	sh_type:      0x03, // SHT_STRTAB
-	sh_flag:      0,
+	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
@@ -358,7 +358,7 @@ var sh_strtab = &sectionHeader{
 var sh_shstrtab *sectionHeader = &sectionHeader{
 	sh_name:      0x11, // ".shstrtab"
 	sh_type:      0x03, // SHT_STRTAB
-	sh_flag:      0,
+	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0,
 	sh_info:      0,
@@ -406,7 +406,7 @@ var s_strtab = &section{
 }
 
 func calcOffsetOfSection(s *section, prev *section) {
-	tentative_offset := prev.header.sh_offst + prev.header.sh_size
+	tentative_offset := prev.header.sh_offset + prev.header.sh_size
 	var align  = s.header.sh_addralign
 	if align == 0 || align == 1 {
 		s.numZeroPad = 0
@@ -418,7 +418,7 @@ func calcOffsetOfSection(s *section, prev *section) {
 			s.numZeroPad = align - mod
 		}
 	}
-	s.header.sh_offst = tentative_offset + s.numZeroPad
+	s.header.sh_offset = tentative_offset + s.numZeroPad
 	s.header.sh_size = uintptr(len(s.contents))
 }
 
@@ -519,13 +519,6 @@ func analyze(stmts []*statement) {
 
 	}
 
-	var addresses = map[string]uintptr{
-		"myGlobalInt": 0x0,
-		"pGlobalInt": 0x08,
-		"myfunc": 0x30,
-		"myfunc2": 0x31,
-		"_start": 0,
-	}
 	var allSymbols []*symbolStruct
 	for _, sym := range p.symStruct.dataSymbols {
 		addr, ok := addresses[sym]
@@ -630,6 +623,14 @@ func translate(s *statement) []byte {
 	}
 }
 
+var addresses = map[string]uintptr{
+	"myGlobalInt": 0x0,
+	"pGlobalInt": 0x08,
+	"myfunc": 0x30,
+	"myfunc2": 0x31,
+	"_start": 0,
+}
+
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
@@ -690,7 +691,7 @@ func main() {
 	makeShStrTab()
 
 	// Calculates offset and zero padding
-	sh_text.sh_offst = ELFHeaderSize
+	sh_text.sh_offset = ELFHeaderSize
 	sh_text.sh_size = uintptr(len(s_text.contents))
 
 	for i := 1; i<len(sectionsOrderByContents);i++ {
@@ -698,7 +699,7 @@ func main() {
 			sectionsOrderByContents[i], sectionsOrderByContents[i-1])
 	}
 
-	shoff := (sh_shstrtab.sh_offst + sh_shstrtab.sh_size)
+	shoff := (sh_shstrtab.sh_offset + sh_shstrtab.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
 	if mod != 0 {
