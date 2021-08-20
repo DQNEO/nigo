@@ -183,9 +183,6 @@ var sectionsOrderByContents = []*section{
 // ## .text (machine code)
 var text []byte = []byte{
 	// .text section
-	// offset: 0x40,
-	// size=len(sc1)=>0x12
-
 	// _start:
 	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nop * 8
 	0xe8, 0x23, 0x00, 0x00, 0x00, // call myfunc
