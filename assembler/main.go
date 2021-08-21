@@ -174,15 +174,21 @@ var elfHeader = Elf64_Ehdr{
 }
 
 // # Part2: Contents of sections
-var sectionsOrderByContents = []*section{
-	s_text,      // .text
-	s_data,      // .data
-	s_bss,       // .bss (no contents)
-	//s_symtab,    // .symtab
-	//s_strtab,    // .strtab
-	//s_rela_text, // .rela.text
-	//s_rela_data, // .rela.data
-	s_shstrtab,  // .shstrtab
+func makeSectionContentsOrder() []*section {
+	var sections = []*section{
+		s_text, // .text
+		s_data, // .data
+		s_bss,  // .bss (no contents)
+	}
+	if len(p.allSymbolNames) > 0 {
+		sections = append(sections, s_symtab, s_strtab)
+	}
+
+	//append s_rela_text,
+	//append s_rela_data,
+
+	sections = append(sections,s_shstrtab)
+	return sections
 }
 
 // .symtab
@@ -218,19 +224,24 @@ type sectionHeaderTable struct {
 	sections []*section
 }
 // # Part3: Section Header Table
-
-var sht = &sectionHeaderTable{
-	sections: []*section{
+func prepareSHTEntries() []*section {
+	r := []*section{
 		s_null,      // NULL
 		s_text,      // .text
-//		sh_rela_text, // .rela.text
+		//		sh_rela_text, // .rela.text
 		s_data,      // .data
-//		sh_rela_data, // .rela.data
+		//		sh_rela_data, // .rela.data
 		s_bss,       // .bss
-//		sh_symtab,    // .symtab
-//		sh_strtab,    // .strtab
-		s_shstrtab,  // .shstrtab
-	},
+	}
+
+	if len(p.allSymbolNames) > 0 {
+		r = append(r, s_symtab, s_strtab)
+	}
+	r = append(r, s_shstrtab)
+	return r
+}
+var sht = &sectionHeaderTable{
+	sections: nil,
 }
 
 var s_null = &section{
@@ -290,8 +301,10 @@ var s_bss = &section{
 	contents: nil,
 }
 
+//  ".symtab"
 //  SHT_SYMTAB (symbol table)
 var s_symtab = &section{
+	sh_name: ".symtab",
 	header:   sh_symtab,
 	contents: nil,
 }
@@ -308,12 +321,29 @@ var s_shstrtab = &section{
 		sh_entsize:   0,
 	},
 }
-/*
+
+// ".strtab"
+//
+//   This section holds strings, most commonly the strings that
+//              represent the names associated with symbol table entries.
+//              If the file has a loadable segment that includes the
+//              symbol string table, the section's attributes will include
+//              the SHF_ALLOC bit.  Otherwise, the bit will be off.  This
+//              section is of type SHT_STRTAB.
 var s_strtab = &section{
-	header:   sh_strtab,
+	sh_name: ".strtab",
+	header: &sectionHeader{
+		sh_type:      0x03, // SHT_STRTAB
+		sh_flags:     0,
+		sh_addr:      0,
+		sh_link:      0,
+		sh_info:      0,
+		sh_addralign: 0x01,
+		sh_entsize:   0,
+	},
 	contents: nil,
 }
-*/
+
 
 /*
 // ".rela.text"
@@ -347,31 +377,10 @@ var sh_symtab = &sectionHeader{
 	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0x05, // @TODO calculate dynamically
-	sh_info:      0x01,
+	sh_info:      0x02, // @TODO calculate dynamically
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
-
-//  .strtab
-//   This section holds strings, most commonly the strings that
-//              represent the names associated with symbol table entries.
-//              If the file has a loadable segment that includes the
-//              symbol string table, the section's attributes will include
-//              the SHF_ALLOC bit.  Otherwise, the bit will be off.  This
-//              section is of type SHT_STRTAB.
-
-/*
-// ".strtab"
-var sh_strtab = &sectionHeader{
-	sh_type:      0x03, // SHT_STRTAB
-	sh_flags:     0,
-	sh_addr:      0,
-	sh_link:      0,
-	sh_info:      0,
-	sh_addralign: 0x01,
-	sh_entsize:   0,
-}
-*/
 
 func calcOffsetOfSection(s *section, prev *section) {
 	tentative_offset := prev.header.sh_offset + prev.header.sh_size
@@ -419,15 +428,20 @@ func makeStrTab() []byte {
 }
 
 func makeSectionNames() []string {
-	var r = []string{
-		//	".symtab",
-		//	".strtab",
+	var sectionNames []string
+
+	if len(p.allSymbolNames) > 0 {
+		sectionNames = append(sectionNames, ".symtab",".strtab")
+	}
+
+	var names = []string{
 		".shstrtab",
 		".text", // or ".rela.text",
 		".data", // or ".rela.data",
 		".bss",
 	}
-	return r
+	sectionNames = append(sectionNames, names...)
+	return sectionNames
 }
 
 
@@ -446,6 +460,10 @@ func resolveShNames(ss []*section) {
 	for _, s := range ss {
 		sh_name := s.sh_name
 		idx := bytes.Index(s_shstrtab.contents, []byte(sh_name))
+		if idx <= 0 {
+			fmt.Fprintf(os.Stderr, "idx of sh %s = %d\n", s.sh_name, idx)
+			panic("invalid idx")
+		}
 		s.header.sh_name = uint32(idx)
 	}
 }
@@ -534,7 +552,7 @@ func analyze(stmts []*statement) {
 		allSymbols = append(allSymbols, &symbolStruct{
 			name:    sym,
 			section: ".text",
-			address: 1,
+			address: 0,
 		})
 	}
 	for _, sym := range p.symStruct.globalfuncSymbols {
@@ -553,10 +571,12 @@ func analyze(stmts []*statement) {
 //	fmt.Printf("%#v\n", allSymbols)
 //	panic("STOP")
 
-	//s_strtab.contents = makeStrTab()
-	if len(allSymbols) == 0 {
+	if len(p.allSymbolNames) == 0 {
 		return
 	}
+
+	s_strtab.contents = makeStrTab()
+
 	for _, sym := range allSymbols {
 		var shndx uint16
 		switch sym.section {
@@ -567,8 +587,12 @@ func analyze(stmts []*statement) {
 		default:
 			panic("TBI")
 		}
+		name_offset := bytes.Index(s_strtab.contents, []byte(sym.name))
+		if name_offset < 0 {
+			panic("name_offset should not be negative")
+		}
 		e := &symbolTableEntry{
-			st_name:  sym.nameOffset,
+			st_name:  uint32(name_offset),
 			st_info:  0,
 			st_other: 0,
 			st_shndx: shndx,
@@ -577,7 +601,7 @@ func analyze(stmts []*statement) {
 		symbolTable = append(symbolTable, e)
 		//fmt.Printf("e=%#v\n", e)
 	}
-	symbolTable[len(symbolTable)-1].st_info = 0x10 // STT_LOOS
+	//symbolTable[len(symbolTable)-1].st_info = 0x10 // STT_LOOS == GLOBAL ??
 }
 
 func translateData(s *statement) []byte {
@@ -727,6 +751,11 @@ func main() {
 	stmts := parse()
 	dumpStmts(stmts)
 	analyze(stmts)
+
+	if len(p.allSymbolNames) > 0 {
+
+	}
+
 	//dumpProgram(p)
 	code := assembleCode(stmts)
 	//dumpCode(code)
@@ -742,6 +771,8 @@ func main() {
 	}
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
+
+	sectionsOrderByContents := makeSectionContentsOrder()
 	resolveShNames(sectionsOrderByContents)
 	// Calculates offset and zero padding
 	s_text.header.sh_offset = ELFHeaderSize
@@ -760,6 +791,9 @@ func main() {
 	}
 	e_shoff := shoff + sht.padding
 	elfHeader.e_shoff = e_shoff
+
+	sht.sections = prepareSHTEntries()
+
 	elfHeader.e_shnum = uint16(len(sht.sections))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 

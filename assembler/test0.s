@@ -1,2 +1,3 @@
 .data
 .text
+main:
