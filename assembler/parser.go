@@ -388,19 +388,19 @@ func parse() []*statement {
 
 func dumpStmt(i int, stmt *statement) {
 	if stmt == emptyStatement {
-		fmt.Printf("%03d| *\n", i)
+
 	} else {
 		var ops []string
 		for _, o := range stmt.operands {
 			ops = append(ops, o.string)
 		}
-		fmt.Printf("%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
+		fmt.Fprintf(os.Stderr, "%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
 	}
 
 }
 
 func dumpStmts(stmts []*statement) {
-	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
+	fmt.Fprintf(os.Stderr, "%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
 	for i, stmt := range stmts {
 		if stmt == emptyStatement {
 			continue

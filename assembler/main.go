@@ -728,6 +728,7 @@ func main() {
 		panic(err)
 	}
 	stmts := parse()
+	dumpStmts(stmts)
 	analyze(stmts)
 	//dumpProgram(p)
 	code := assembleCode(stmts)
