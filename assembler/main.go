@@ -291,12 +291,10 @@ var s_bss = &section{
 }
 
 //  SHT_SYMTAB (symbol table)
-/*
 var s_symtab = &section{
 	header:   sh_symtab,
 	contents: nil,
 }
-*/
 
 var s_shstrtab = &section{
 	sh_name: ".shstrtab",
@@ -343,19 +341,16 @@ var sh_rela_data = &sectionHeader{
 }
 */
 
-/*
+// ".symtab"
 var sh_symtab = &sectionHeader{
-	sh_name:      0x01, // ".symtab"
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flags:     0,
 	sh_addr:      0,
-	sh_link:      0x05,
+	sh_link:      0x05, // @TODO calculate dynamically
 	sh_info:      0x01,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
-
-*/
 
 //  .strtab
 //   This section holds strings, most commonly the strings that
@@ -397,14 +392,14 @@ func calcOffsetOfSection(s *section, prev *section) {
 
 func makeDataSection() {
 }
-/*
+
 func makeSymbolTable() {
 	for _, entry := range symbolTable {
 		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
 		s_symtab.contents = append(s_symtab.contents, buf...)
 	}
 }
-*/
+
 var allSymbolNames = []string{
 	"main",
 }
@@ -559,7 +554,9 @@ func analyze(stmts []*statement) {
 //	panic("STOP")
 
 	//s_strtab.contents = makeStrTab()
-
+	if len(allSymbols) == 0 {
+		return
+	}
 	for _, sym := range allSymbols {
 		var shndx uint16
 		switch sym.section {
@@ -740,7 +737,9 @@ func main() {
 	data := assembleData(p.dataStmts)
 	s_data.contents = data
 
-	//makeSymbolTable()
+	if len(symbols) > 0 {
+		makeSymbolTable()
+	}
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
 	resolveShNames(sectionsOrderByContents)
