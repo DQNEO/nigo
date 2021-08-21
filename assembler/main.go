@@ -377,7 +377,9 @@ var sh_symtab = &sectionHeader{
 	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0x05, // @TODO calculate dynamically
-	sh_info:      0x02, // @TODO calculate dynamically
+	// https://reviews.llvm.org/D28950
+	// The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
+	sh_info:      0x01, // @TODO calculate dynamically
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -491,7 +493,7 @@ type programStruct struct {
 var p = &programStruct{}
 var symbols []string
 
-var mpGlobals = make(map[string]none)
+var globalSymbols = make(map[string]bool)
 
 func analyze(stmts []*statement) {
 	var currentSection string
@@ -507,7 +509,7 @@ func analyze(stmts []*statement) {
 			currentSection = ".text"
 			continue
 		case ".global":
-			mpGlobals[s.operands[0].string] = true
+			globalSymbols[s.operands[0].string] = true
 		}
 
 		switch currentSection {
@@ -521,7 +523,7 @@ func analyze(stmts []*statement) {
 			p.textStmts = append(p.textStmts, s)
 			if s.labelSymbol != "" {
 				symbols = append(symbols, s.labelSymbol)
-				if mpGlobals[s.labelSymbol] {
+				if globalSymbols[s.labelSymbol] {
 					p.symStruct.globalfuncSymbols = append(p.symStruct.globalfuncSymbols, s.labelSymbol)
 				} else {
 					p.symStruct.localfuncSymbols = append(p.symStruct.localfuncSymbols, s.labelSymbol)
@@ -576,7 +578,6 @@ func analyze(stmts []*statement) {
 	}
 
 	s_strtab.contents = makeStrTab()
-
 	for _, sym := range allSymbols {
 		var shndx uint16
 		switch sym.section {
@@ -591,17 +592,19 @@ func analyze(stmts []*statement) {
 		if name_offset < 0 {
 			panic("name_offset should not be negative")
 		}
+		var st_info uint8
+		if globalSymbols[sym.name] {
+			st_info = 0x10 // GLOBAL ?
+		}
 		e := &symbolTableEntry{
 			st_name:  uint32(name_offset),
-			st_info:  0,
+			st_info:  st_info,
 			st_other: 0,
 			st_shndx: shndx,
 			st_value: sym.address,
 		}
 		symbolTable = append(symbolTable, e)
-		//fmt.Printf("e=%#v\n", e)
 	}
-	//symbolTable[len(symbolTable)-1].st_info = 0x10 // STT_LOOS == GLOBAL ??
 }
 
 func translateData(s *statement) []byte {
