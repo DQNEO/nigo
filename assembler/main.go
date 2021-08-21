@@ -208,16 +208,6 @@ var rela_data = []byte{
 }
 */
 
-// contents of .shstrtab"
-var sectionNames = []string{
-//	".symtab",
-//	".strtab",
-	".shstrtab",
-	".text", //".rela.text",
-	".data", //".rela.data",
-	".bss",
-}
-
 type sectionHeaderTable struct {
 	padding uintptr
 	entries []*sectionHeader
@@ -250,7 +240,7 @@ var sh_text = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
-
+/*
 var sh_rela_text = &sectionHeader{
 	sh_name:      0x00, // ".rela.text"
 	sh_type:      0x04, // SHT_RELA
@@ -260,7 +250,7 @@ var sh_rela_text = &sectionHeader{
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
-
+*/
 var sh_data = &sectionHeader{
 	sh_name:      0x11, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
@@ -272,6 +262,7 @@ var sh_data = &sectionHeader{
 	sh_entsize:   0,
 }
 
+/*
 var sh_rela_data = &sectionHeader{
 	sh_name:      0x00, // ".rela.data"
 	sh_type:      0x04, // SHT_RELA
@@ -281,7 +272,7 @@ var sh_rela_data = &sectionHeader{
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
-
+*/
 var sh_bss = &sectionHeader{
 	sh_name:      0x17, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
@@ -293,7 +284,7 @@ var sh_bss = &sectionHeader{
 	sh_entsize:   0,
 }
 
-
+/*
 var sh_symtab = &sectionHeader{
 	sh_name:      0x01, // ".symtab"
 	sh_type:      0x02, // SHT_SYMTAB
@@ -305,6 +296,7 @@ var sh_symtab = &sectionHeader{
 	sh_entsize:   0x18,
 }
 
+*/
 
 //  .strtab
 //   This section holds strings, most commonly the strings that
@@ -362,20 +354,24 @@ var s_bss = &section{
 	header:   sh_bss,
 	contents: nil,
 }
+
 //  SHT_SYMTAB (symbol table)
+/*
 var s_symtab = &section{
 	header:   sh_symtab,
 	contents: nil,
 }
+*/
 
 var s_shstrtab = &section{
 	header: sh_shstrtab,
 }
-
+/*
 var s_strtab = &section{
 	header:   sh_strtab,
 	contents: nil,
 }
+*/
 
 func calcOffsetOfSection(s *section, prev *section) {
 	tentative_offset := prev.header.sh_offset + prev.header.sh_size
@@ -396,14 +392,14 @@ func calcOffsetOfSection(s *section, prev *section) {
 
 func makeDataSection() {
 }
-
+/*
 func makeSymbolTable() {
 	for _, entry := range symbolTable {
 		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
 		s_symtab.contents = append(s_symtab.contents, buf...)
 	}
 }
-
+*/
 var allSymbolNames = []string{
 	"main",
 }
@@ -422,7 +418,21 @@ func makeStrTab() []byte {
 	return data
 }
 
-func makeShStrTab() {
+func makeSectionNames() []string {
+	var r = []string{
+		//	".symtab",
+		//	".strtab",
+		".shstrtab",
+		".text", // or ".rela.text",
+		".data", // or ".rela.data",
+		".bss",
+	}
+	return r
+}
+
+
+// Make contents of .shstrtab"
+func makeShStrTab(sectionNames []string) {
 	var data []byte = []byte{0x00}
 	for _, name := range sectionNames {
 		buf := []byte(name)
@@ -535,7 +545,7 @@ func analyze(stmts []*statement) {
 //	fmt.Printf("%#v\n", allSymbols)
 //	panic("STOP")
 
-	s_strtab.contents = makeStrTab()
+	//s_strtab.contents = makeStrTab()
 
 	for _, sym := range allSymbols {
 		var shndx uint16
@@ -716,9 +726,9 @@ func main() {
 	data := assembleData(p.dataStmts)
 	s_data.contents = data
 
-	makeSymbolTable()
-
-	makeShStrTab()
+	//makeSymbolTable()
+	sectionNames := makeSectionNames()
+	makeShStrTab(sectionNames)
 
 	// Calculates offset and zero padding
 	sh_text.sh_offset = ELFHeaderSize
@@ -743,7 +753,6 @@ func main() {
 	// Output
 	output(&elfHeader, sectionsOrderByContents, sht)
 }
-
 
 func output(elfHeader *Elf64_Ehdr, sections []*section, sht *sectionHeaderTable) {
 	// Part 1: Write ELF Header
