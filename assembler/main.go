@@ -173,8 +173,8 @@ var sectionsOrderByContents = []*section{
 	s_text,      // .text
 	s_data,      // .data
 	s_bss,       // .bss (no contents)
-	s_symtab,    // .symtab
-	s_strtab,    // .strtab
+	//s_symtab,    // .symtab
+	//s_strtab,    // .strtab
 	//s_rela_text, // .rela.text
 	//s_rela_data, // .rela.data
 	s_shstrtab,  // .shstrtab
@@ -210,8 +210,8 @@ var rela_data = []byte{
 
 // contents of .shstrtab"
 var sectionNames = []string{
-	".symtab",
-	".strtab",
+//	".symtab",
+//	".strtab",
 	".shstrtab",
 	".text", //".rela.text",
 	".data", //".rela.data",
@@ -232,8 +232,8 @@ var sht = &sectionHeaderTable{
 		sh_data,      // .data
 //		sh_rela_data, // .rela.data
 		sh_bss,       // .bss
-		sh_symtab,    // .symtab
-		sh_strtab,    // .strtab
+//		sh_symtab,    // .symtab
+//		sh_strtab,    // .strtab
 		sh_shstrtab,  // .shstrtab
 	},
 }
@@ -241,7 +241,7 @@ var sht = &sectionHeaderTable{
 var sh_null = &sectionHeader{}
 
 var sh_text = &sectionHeader{
-	sh_name:      0x1b, // ".text"
+	sh_name:      0x0b, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
 	sh_addr:      0,
@@ -262,7 +262,7 @@ var sh_rela_text = &sectionHeader{
 }
 
 var sh_data = &sectionHeader{
-	sh_name:      0x21, // ".data"
+	sh_name:      0x11, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -283,7 +283,7 @@ var sh_rela_data = &sectionHeader{
 }
 
 var sh_bss = &sectionHeader{
-	sh_name:      0x27, // ".bss"
+	sh_name:      0x17, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -327,7 +327,7 @@ var sh_strtab = &sectionHeader{
 
 //  this is what e_shstrndx points to
 var sh_shstrtab *sectionHeader = &sectionHeader{
-	sh_name:      0x11, // ".shstrtab"
+	sh_name:      0x01, // ".shstrtab"
 	sh_type:      0x03, // SHT_STRTAB
 	sh_flags:     0,
 	sh_addr:      0,
@@ -341,7 +341,7 @@ var s_text = &section{
 	header:   sh_text,
 	contents: nil,
 }
-
+/*
 var s_rela_text = &section{
 	header:   sh_rela_text,
 	contents: rela_text,
@@ -351,6 +351,7 @@ var s_rela_data = &section{
 	header:   sh_rela_data,
 	contents: rela_data,
 }
+*/
 
 var s_data = &section{
 	header:   sh_data,
