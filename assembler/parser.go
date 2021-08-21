@@ -172,17 +172,20 @@ func parseOperand() *operand {
 			// indirection e.g. 24(%rbp)
 			regi := readIndirection()
 			return &operand{
+				typ: "indirection",
 				string: fmt.Sprintf("indirect %s(%s)", symbol, regi),
 			}
 		} else {
 			// just a symbol
 			return  &operand{
+				typ: "symbol",
 				string :string(symbol),
 			}
 		}
 	case ch == '"':
 		s := readStringLiteral()
 		return  &operand{
+			typ: "stringliteral",
 			string :string("\"" + s + "\""),
 		}
 	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"e
@@ -191,11 +194,13 @@ func parseOperand() *operand {
 			// indirection e.g. 24(%rbp)
 			regi := readIndirection()
 			return &operand{
+				typ: "indirection",
 				string: fmt.Sprintf("indirect %s(%s)", n, regi),
 			}
 		} else {
 			// just a number
 			return  &operand{
+				typ: "number",
 				string :string(n),
 			}
 		}
@@ -209,11 +214,13 @@ func parseOperand() *operand {
 		// "$123" "$-7"
 		n := readNumber()
 		return  &operand{
+			typ: "$number",
 			string :string(n),
 		}
 	case ch == '%':
 		regi := readRegi()
 		return  &operand{
+			typ: "register",
 			string :string(regi),
 		}
 	default:
@@ -258,6 +265,7 @@ var idx int
 var lineno int = 1
 
 type operand struct {
+	typ string
 	string
 }
 

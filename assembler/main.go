@@ -175,8 +175,8 @@ var sectionsOrderByContents = []*section{
 	s_bss,       // .bss (no contents)
 	s_symtab,    // .symtab
 	s_strtab,    // .strtab
-	s_rela_text, // .rela.text
-	s_rela_data, // .rela.data
+	//s_rela_text, // .rela.text
+	//s_rela_data, // .rela.data
 	s_shstrtab,  // .shstrtab
 }
 
@@ -184,12 +184,16 @@ var sectionsOrderByContents = []*section{
 var symbolTable = []*symbolTableEntry{
 	&symbolTableEntry{ // NULL entry
 	},
+/*
 	&symbolTableEntry{
 		st_info:  0x03, // STT_SECTION
 		st_shndx: 0x03, // section ".data"
 	},
+
+ */
 }
 
+/*
 // contents of .rela.text
 var rela_text = []byte{
 	0x15 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
@@ -202,14 +206,15 @@ var rela_data = []byte{
 	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00,
 	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
 }
+*/
 
 // contents of .shstrtab"
 var sectionNames = []string{
 	".symtab",
 	".strtab",
 	".shstrtab",
-	".rela.text",
-	".rela.data",
+	".text", //".rela.text",
+	".data", //".rela.data",
 	".bss",
 }
 
@@ -223,9 +228,9 @@ var sht = &sectionHeaderTable{
 	entries: []*sectionHeader{
 		sh_null,      // NULL
 		sh_text,      // .text
-		sh_rela_text, // .rela.text
+//		sh_rela_text, // .rela.text
 		sh_data,      // .data
-		sh_rela_data, // .rela.data
+//		sh_rela_data, // .rela.data
 		sh_bss,       // .bss
 		sh_symtab,    // .symtab
 		sh_strtab,    // .strtab
@@ -236,7 +241,7 @@ var sht = &sectionHeaderTable{
 var sh_null = &sectionHeader{}
 
 var sh_text = &sectionHeader{
-	sh_name:      0x20, // ".text"
+	sh_name:      0x1b, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
 	sh_addr:      0,
@@ -247,7 +252,7 @@ var sh_text = &sectionHeader{
 }
 
 var sh_rela_text = &sectionHeader{
-	sh_name:      0x1b, // ".rela.text"
+	sh_name:      0x00, // ".rela.text"
 	sh_type:      0x04, // SHT_RELA
 	sh_flags:     0x40, // * ??
 	sh_link:      0x06,
@@ -257,7 +262,7 @@ var sh_rela_text = &sectionHeader{
 }
 
 var sh_data = &sectionHeader{
-	sh_name:      0x2b, // ".data"
+	sh_name:      0x21, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -268,7 +273,7 @@ var sh_data = &sectionHeader{
 }
 
 var sh_rela_data = &sectionHeader{
-	sh_name:      0x26, // ".rela.data"
+	sh_name:      0x00, // ".rela.data"
 	sh_type:      0x04, // SHT_RELA
 	sh_flags:     0x40, // I ??
 	sh_link:      0x06,
@@ -278,7 +283,7 @@ var sh_rela_data = &sectionHeader{
 }
 
 var sh_bss = &sectionHeader{
-	sh_name:      0x31, // ".bss"
+	sh_name:      0x27, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -294,8 +299,8 @@ var sh_symtab = &sectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flags:     0,
 	sh_addr:      0,
-	sh_link:      0x07,
-	sh_info:      0x06,
+	sh_link:      0x05,
+	sh_info:      0x01,
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -398,16 +403,21 @@ func makeSymbolTable() {
 	}
 }
 
+var allSymbolNames = []string{
+	"main",
+}
+
 func makeStrTab() []byte {
 	var nameOffset uint32
 	var data []byte = []byte{0x00}
 	nameOffset++
-	for _, sym := range p.allSymbolNames {
-		sym.nameOffset = nameOffset
-		buf := append([]byte(sym.name), 0x00)
+	for _, sym := range allSymbolNames {
+		//sym.nameOffset = nameOffset
+		buf := append([]byte(sym), 0x00)
 		data = append(data, buf...)
 		nameOffset += uint32(len(buf))
 	}
+
 	return data
 }
 
@@ -487,39 +497,42 @@ func analyze(stmts []*statement) {
 
 	var allSymbols []*symbolStruct
 	for _, sym := range p.symStruct.dataSymbols {
-		addr, ok := addresses[sym]
-		if !ok {
-			panic("address not found")
-		}
+//		addr, ok := addresses[sym]
+//		if !ok {
+////			panic("address not found")
+//		}
 		allSymbols = append(allSymbols, &symbolStruct{
 			name:    sym,
 			section: ".data",
-			address: addr,
+			address: 0,
 		})
 	}
 	for _, sym := range p.symStruct.localfuncSymbols {
-		addr, ok := addresses[sym]
-		if !ok {
-			panic("address not found")
-		}
+//		addr, ok := addresses[sym]
+//		if !ok {
+////			panic("address not found")
+//		}
 		allSymbols = append(allSymbols, &symbolStruct{
 			name:    sym,
 			section: ".text",
-			address: addr,
+			address: 1,
 		})
 	}
 	for _, sym := range p.symStruct.globalfuncSymbols {
-		addr, ok := addresses[sym]
-		if !ok {
-			panic("address not found")
-		}
+//		addr, ok := addresses[sym]
+//		if !ok {
+////			panic("address not found")
+//		}
 		allSymbols = append(allSymbols, &symbolStruct{
 			name:    sym,
 			section: ".text",
-			address: addr,
+			address: 0,
+			nameOffset: 1,
 		})
 	}
 	p.allSymbolNames = allSymbols
+//	fmt.Printf("%#v\n", allSymbols)
+//	panic("STOP")
 
 	s_strtab.contents = makeStrTab()
 
@@ -583,6 +596,7 @@ var insts = [][]byte{
 
 func translateCode(s *statement) []byte {
 	var r []byte
+	//fmt.Printf("[translator] %s (%d ops) => ", s.keySymbol, len(s.operands))
 	switch s.keySymbol {
 	case "nop":
 		r = []byte{0x90}
@@ -597,23 +611,45 @@ func translateCode(s *statement) []byte {
 			panic("ERROR")
 		}
 		r =  []byte{0xe8, dst, 0, 0, 0}
+	case "movl":
+		op1, op2 := s.operands[0], s.operands[1]
+		assert(op1.typ == "$number", "op1 type should be $number")
+		assert(op2.typ == "register", "op2 type should be register")
+		//fmt.Printf("op1,op2=%s,%s  ", op1, op2)
+		r = []byte{  0xb8, 0x2a, 0, 0, 0 }
 	case "movq":
 		r = insts[movqIdx]
 		movqIdx++
 	case "addq":
 		r = []byte{REX_W, 0x01, 0xc7} // REX.W, ADD, ModR/M
-	case "retq":
+	case "ret", "retq":
 		r = []byte{0xc3}
 	case "syscall":
 		r = []byte{0x0f, 0x05}
+	case ".text":
+		//fmt.Printf(" skip\n")
+		return nil
 	default:
+		if strings.HasPrefix(s.keySymbol , ".") {
+			//fmt.Printf(" (directive)\n")
+			return nil
+		} else {
+			if s.labelSymbol != "" && s.keySymbol == "" {
+				//fmt.Printf(" (label)\n")
+				return nil
+			} else {
+				panic("Unexpected key symbols:" + s.keySymbol)
+			}
+		}
 		//return nil
 	}
-	//fmt.Printf("[debug] %s %s ", s.keySymbol, s.operands)
-	//fmt.Printf("=> %x \n", r)
+
+	//fmt.Printf("=>  %#x\n", r)
+
 	return r
 }
 
+/*
 var addresses = map[string]uintptr{
 	"myGlobalInt": 0x0,
 	"pGlobalInt": 0x08,
@@ -621,13 +657,14 @@ var addresses = map[string]uintptr{
 	"myfunc2": 0x31,
 	"_start": 0,
 }
-
+*/
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
 		buf := translateCode(s)
 		code = append(code, buf...)
 	}
+
 	return code
 }
 
@@ -652,7 +689,7 @@ func dumpProgram(p *programStruct) {
 }
 
 func dumpCode(code []byte) {
-	fmt.Printf("code\n")
+	fmt.Printf("[dumping code]\n")
 	for _, c := range code {
 		fmt.Printf("%x ", c)
 	}
@@ -669,8 +706,10 @@ func main() {
 	stmts := parse()
 	analyze(stmts)
 	//dumpProgram(p)
-	s_text.contents = assembleCode(p.textStmts)
+	code := assembleCode(stmts)
 	//dumpCode(code)
+	//return
+	s_text.contents = code
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 
 	data := assembleData(p.dataStmts)
