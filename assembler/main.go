@@ -660,8 +660,15 @@ func translateCode(s *statement) []byte {
 		op1, op2 := s.operands[0], s.operands[1]
 		assert(op1.typ == "$number", "op1 type should be $number")
 		assert(op2.typ == "register", "op2 type should be register")
-		//fmt.Printf("op1,op2=%s,%s  ", op1, op2)
-		r = []byte{  0xb8, 0x2a, 0, 0, 0 }
+		//fmt.Fprintf(os.Stderr, "op1,op2=%s,%s  ", op1, op2)
+		intNum, err := strconv.ParseInt(op1.string, 0, 32)
+		if err != nil {
+			panic(err)
+		}
+		var num int32 = int32(intNum)
+		bytesNum := (*[4]byte)(unsafe.Pointer(&num))
+		tmp := []byte{0xb8}
+		r = append(tmp, (bytesNum[:])...)
 	case "movq":
 		r = insts[movqIdx]
 		movqIdx++
