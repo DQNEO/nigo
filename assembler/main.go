@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
-	"os"
 	"unsafe"
 )
 
@@ -214,37 +214,109 @@ var rela_data = []byte{
 */
 
 type sectionHeaderTable struct {
-	padding uintptr
-	entries []*sectionHeader
+	padding  uintptr
+	sections []*section
 }
 // # Part3: Section Header Table
 
 var sht = &sectionHeaderTable{
-	entries: []*sectionHeader{
-		sh_null,      // NULL
-		sh_text,      // .text
+	sections: []*section{
+		s_null,      // NULL
+		s_text,      // .text
 //		sh_rela_text, // .rela.text
-		sh_data,      // .data
+		s_data,      // .data
 //		sh_rela_data, // .rela.data
-		sh_bss,       // .bss
+		s_bss,       // .bss
 //		sh_symtab,    // .symtab
 //		sh_strtab,    // .strtab
-		sh_shstrtab,  // .shstrtab
+		s_shstrtab,  // .shstrtab
 	},
 }
 
-var sh_null = &sectionHeader{}
-
-// ".text"
-var sh_text = &sectionHeader{
-	sh_type:      0x01, // SHT_PROGBITS
-	sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
-	sh_addr:      0,
-	sh_link:      0,
-	sh_info:      0,
-	sh_addralign: 0x01,
-	sh_entsize:   0,
+var s_null = &section{
+	header: &sectionHeader{},
 }
+
+var s_text = &section{
+	sh_name: ".text",
+	header: &sectionHeader{
+		sh_type:      0x01, // SHT_PROGBITS
+		sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
+		sh_addr:      0,
+		sh_link:      0,
+		sh_info:      0,
+		sh_addralign: 0x01,
+		sh_entsize:   0,
+	},
+	contents: nil,
+}
+/*
+var s_rela_text = &section{
+	header:   sh_rela_text,
+	contents: rela_text,
+}
+
+var s_rela_data = &section{
+	header:   sh_rela_data,
+	contents: rela_data,
+}
+*/
+
+var s_data = &section{
+	sh_name: ".data",
+	header: &sectionHeader{
+		sh_type:      0x01, // SHT_PROGBITS
+		sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
+		sh_addr:      0,
+		sh_link:      0,
+		sh_info:      0,
+		sh_addralign: 0x01,
+		sh_entsize:   0,
+	},
+	contents: nil,
+}
+
+var s_bss = &section{
+	sh_name: ".bss",
+	header: &sectionHeader{
+		sh_type:      0x08, // SHT_NOBITS
+		sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
+		sh_addr:      0,
+		sh_link:      0,
+		sh_info:      0,
+		sh_addralign: 0x01,
+		sh_entsize:   0,
+	},
+	contents: nil,
+}
+
+//  SHT_SYMTAB (symbol table)
+/*
+var s_symtab = &section{
+	header:   sh_symtab,
+	contents: nil,
+}
+*/
+
+var s_shstrtab = &section{
+	sh_name: ".shstrtab",
+	header: &sectionHeader{
+		sh_type:      0x03, // SHT_STRTAB
+		sh_flags:     0,
+		sh_addr:      0,
+		sh_link:      0,
+		sh_info:      0,
+		sh_addralign: 0x01,
+		sh_entsize:   0,
+	},
+}
+/*
+var s_strtab = &section{
+	header:   sh_strtab,
+	contents: nil,
+}
+*/
+
 /*
 // ".rela.text"
 var sh_rela_text = &sectionHeader{
@@ -258,17 +330,6 @@ var sh_rela_text = &sectionHeader{
 }
 */
 
-// ".data"
-var sh_data = &sectionHeader{
-	sh_type:      0x01, // SHT_PROGBITS
-	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
-	sh_addr:      0,
-	sh_link:      0,
-	sh_info:      0,
-	sh_addralign: 0x01,
-	sh_entsize:   0,
-}
-
 /*
 // ".rela.data"
 var sh_rela_data = &sectionHeader{
@@ -281,17 +342,6 @@ var sh_rela_data = &sectionHeader{
 	sh_entsize:   0x18,
 }
 */
-
-// ".bss"
-var sh_bss = &sectionHeader{
-	sh_type:      0x08, // SHT_NOBITS
-	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
-	sh_addr:      0,
-	sh_link:      0,
-	sh_info:      0,
-	sh_addralign: 0x01,
-	sh_entsize:   0,
-}
 
 /*
 var sh_symtab = &sectionHeader{
@@ -325,66 +375,6 @@ var sh_strtab = &sectionHeader{
 	sh_info:      0,
 	sh_addralign: 0x01,
 	sh_entsize:   0,
-}
-*/
-
-// ".shstrtab"
-//  this is what e_shstrndx points to
-var sh_shstrtab *sectionHeader = &sectionHeader{
-	sh_type:      0x03, // SHT_STRTAB
-	sh_flags:     0,
-	sh_addr:      0,
-	sh_link:      0,
-	sh_info:      0,
-	sh_addralign: 0x01,
-	sh_entsize:   0,
-}
-
-var s_text = &section{
-	sh_name: ".text",
-	header:   sh_text,
-	contents: nil,
-}
-/*
-var s_rela_text = &section{
-	header:   sh_rela_text,
-	contents: rela_text,
-}
-
-var s_rela_data = &section{
-	header:   sh_rela_data,
-	contents: rela_data,
-}
-*/
-
-var s_data = &section{
-	sh_name: ".data",
-	header:   sh_data,
-	contents: nil,
-}
-
-var s_bss = &section{
-	sh_name: ".bss",
-	header:   sh_bss,
-	contents: nil,
-}
-
-//  SHT_SYMTAB (symbol table)
-/*
-var s_symtab = &section{
-	header:   sh_symtab,
-	contents: nil,
-}
-*/
-
-var s_shstrtab = &section{
-	sh_name: ".shstrtab",
-	header: sh_shstrtab,
-}
-/*
-var s_strtab = &section{
-	header:   sh_strtab,
-	contents: nil,
 }
 */
 
@@ -754,15 +744,15 @@ func main() {
 	makeShStrTab(sectionNames)
 	resolveShNames(sectionsOrderByContents)
 	// Calculates offset and zero padding
-	sh_text.sh_offset = ELFHeaderSize
-	sh_text.sh_size = uintptr(len(s_text.contents))
+	s_text.header.sh_offset = ELFHeaderSize
+	s_text.header.sh_size = uintptr(len(s_text.contents))
 
 	for i := 1; i<len(sectionsOrderByContents);i++ {
 		calcOffsetOfSection(
 			sectionsOrderByContents[i], sectionsOrderByContents[i-1])
 	}
 
-	shoff := (sh_shstrtab.sh_offset + sh_shstrtab.sh_size)
+	shoff := (s_shstrtab.header.sh_offset + s_shstrtab.header.sh_size)
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
 	if mod != 0 {
@@ -770,7 +760,7 @@ func main() {
 	}
 	e_shoff := shoff + sht.padding
 	elfHeader.e_shoff = e_shoff
-	elfHeader.e_shnum = uint16(len(sht.entries))
+	elfHeader.e_shnum = uint16(len(sht.sections))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
 	// Output
@@ -796,8 +786,8 @@ func output(elfHeader *Elf64_Ehdr, sections []*section, sht *sectionHeaderTable)
 
 	// Part 3: Write Section Header Table
 	os.Stdout.Write(make([]uint8, sht.padding))
-	for _, entry := range sht.entries {
-		var buf []byte = ((*[unsafe.Sizeof(*entry)]byte)(unsafe.Pointer(entry)))[:]
+	for _, sec := range sht.sections {
+		var buf []byte = ((*[unsafe.Sizeof(*sec.header)]byte)(unsafe.Pointer(sec.header)))[:]
 		os.Stdout.Write(buf)
 	}
 }
