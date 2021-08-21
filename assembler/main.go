@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -112,6 +113,9 @@ type symbolTableEntry struct {
 //           } Elf64_Shdr;
 
 type sectionHeader struct {
+	// This member specifies the name of the section.
+	// Its value is an index into the section header string table section,
+	// giving the location of a null-terminated string.
 	sh_name   uint32  // 4
 	sh_type   uint32  // 8
 	sh_flags  uintptr // 16
@@ -133,6 +137,7 @@ type sectionHeader struct {
 }
 
 type section struct {
+	sh_name string
 	header *sectionHeader
 	numZeroPad uintptr
 	contents []uint8
@@ -230,8 +235,8 @@ var sht = &sectionHeaderTable{
 
 var sh_null = &sectionHeader{}
 
+// ".text"
 var sh_text = &sectionHeader{
-	sh_name:      0x0b, // ".text"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
 	sh_addr:      0,
@@ -241,8 +246,9 @@ var sh_text = &sectionHeader{
 	sh_entsize:   0,
 }
 /*
+// ".rela.text"
 var sh_rela_text = &sectionHeader{
-	sh_name:      0x00, // ".rela.text"
+	sh_name:      0x00,
 	sh_type:      0x04, // SHT_RELA
 	sh_flags:     0x40, // * ??
 	sh_link:      0x06,
@@ -251,8 +257,9 @@ var sh_rela_text = &sectionHeader{
 	sh_entsize:   0x18,
 }
 */
+
+// ".data"
 var sh_data = &sectionHeader{
-	sh_name:      0x11, // ".data"
 	sh_type:      0x01, // SHT_PROGBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -263,8 +270,9 @@ var sh_data = &sectionHeader{
 }
 
 /*
+// ".rela.data"
 var sh_rela_data = &sectionHeader{
-	sh_name:      0x00, // ".rela.data"
+	sh_name:      0x00,
 	sh_type:      0x04, // SHT_RELA
 	sh_flags:     0x40, // I ??
 	sh_link:      0x06,
@@ -273,8 +281,9 @@ var sh_rela_data = &sectionHeader{
 	sh_entsize:   0x18,
 }
 */
+
+// ".bss"
 var sh_bss = &sectionHeader{
-	sh_name:      0x17, // ".bss"
 	sh_type:      0x08, // SHT_NOBITS
 	sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 	sh_addr:      0,
@@ -306,8 +315,9 @@ var sh_symtab = &sectionHeader{
 //              the SHF_ALLOC bit.  Otherwise, the bit will be off.  This
 //              section is of type SHT_STRTAB.
 
+/*
+// ".strtab"
 var sh_strtab = &sectionHeader{
-	sh_name:      0x09, // ".strtab"
 	sh_type:      0x03, // SHT_STRTAB
 	sh_flags:     0,
 	sh_addr:      0,
@@ -316,10 +326,11 @@ var sh_strtab = &sectionHeader{
 	sh_addralign: 0x01,
 	sh_entsize:   0,
 }
+*/
 
+// ".shstrtab"
 //  this is what e_shstrndx points to
 var sh_shstrtab *sectionHeader = &sectionHeader{
-	sh_name:      0x01, // ".shstrtab"
 	sh_type:      0x03, // SHT_STRTAB
 	sh_flags:     0,
 	sh_addr:      0,
@@ -330,6 +341,7 @@ var sh_shstrtab *sectionHeader = &sectionHeader{
 }
 
 var s_text = &section{
+	sh_name: ".text",
 	header:   sh_text,
 	contents: nil,
 }
@@ -346,11 +358,13 @@ var s_rela_data = &section{
 */
 
 var s_data = &section{
+	sh_name: ".data",
 	header:   sh_data,
 	contents: nil,
 }
 
 var s_bss = &section{
+	sh_name: ".bss",
 	header:   sh_bss,
 	contents: nil,
 }
@@ -364,6 +378,7 @@ var s_symtab = &section{
 */
 
 var s_shstrtab = &section{
+	sh_name: ".shstrtab",
 	header: sh_shstrtab,
 }
 /*
@@ -440,6 +455,14 @@ func makeShStrTab(sectionNames []string) {
 		data = append(data, buf...)
 	}
 	s_shstrtab.contents = data
+}
+
+func resolveShNames(ss []*section) {
+	for _, s := range ss {
+		sh_name := s.sh_name
+		idx := bytes.Index(s_shstrtab.contents, []byte(sh_name))
+		s.header.sh_name = uint32(idx)
+	}
 }
 
 type symbolTableStruct struct {
@@ -729,7 +752,7 @@ func main() {
 	//makeSymbolTable()
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
-
+	resolveShNames(sectionsOrderByContents)
 	// Calculates offset and zero padding
 	sh_text.sh_offset = ELFHeaderSize
 	sh_text.sh_size = uintptr(len(s_text.contents))
