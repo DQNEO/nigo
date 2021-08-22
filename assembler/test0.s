@@ -11,5 +11,8 @@ main:
   movl $0x11, %ebp
   movl $0x11, %esi
   movl $0x11, %edi
+  addl %eax, %eax
+  addl %eax, %ecx
+  addl %eax, %edi
   movl $0x2a, %eax
   ret

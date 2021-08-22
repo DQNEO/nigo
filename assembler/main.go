@@ -694,6 +694,14 @@ func translateCode(s *statement) []byte {
 		opcode = 0xb8 + regFieldN
 		tmp := []byte{opcode}
 		r = append(tmp, (bytesNum[:])...)
+	case "addl":
+		op1, op2 := s.operands[0], s.operands[1]
+		assert(op1.typ == "register", "op1 type should be register")
+		assert(op2.typ == "register", "op2 type should be register")
+		var opcode uint8 = 0x01
+		regFieldN := regField(op2.string[1:])
+		var modRM uint8 = 0b11000000+ regFieldN
+		r = []byte{opcode, modRM}
 	case "movq":
 		r = insts[movqIdx]
 		movqIdx++
