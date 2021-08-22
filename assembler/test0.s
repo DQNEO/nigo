@@ -2,7 +2,7 @@
 var1:
   .quad 0x10
 var2:
-  .quad 0x20
+  .quad var1
 
 .text
 .global _start

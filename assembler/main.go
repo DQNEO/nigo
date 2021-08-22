@@ -122,6 +122,9 @@ type sectionHeader struct {
 	sh_addr   uintptr // 24
 	sh_offset uintptr // 32
 	sh_size   uintptr // 40
+
+	// This member holds a section header table index link,
+	// whose interpretation depends on the section type.
 	sh_link   uint32  // 44
 	sh_info   uint32  // 48
 
@@ -186,7 +189,9 @@ func makeSectionContentsOrder() []*section {
 	}
 
 	//append s_rela_text,
-	//append s_rela_data,
+	if needRelaData {
+		sections = append(sections, s_rela_data)
+	}
 
 	sections = append(sections,s_shstrtab)
 	return sections
@@ -213,12 +218,19 @@ var rela_text = []byte{
 	0x04 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
 }
 
-var rela_data = []byte{
-	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
-	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00,
-	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00,
-}
 */
+// Relocation structures that need an addend:
+//     typedef struct {
+//               Elf64_Addr r_offset;
+//               uint64_t   r_info;
+//               int64_t    r_addend;
+//           } Elf64_Rela;
+//
+var rela_data = []byte{
+	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset = 0x8
+	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
+	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
+}
 
 type sectionHeaderTable struct {
 	padding  uintptr
@@ -232,9 +244,12 @@ func prepareSHTEntries() []*section {
 		//		sh_rela_text, // .rela.text
 		s_data,      // .data
 		//		sh_rela_data, // .rela.data
-		s_bss,       // .bss
 	}
 
+	if needRelaData {
+		r = append(r, s_rela_data)
+	}
+	r = append(r, s_bss)
 	if len(p.allSymbolNames) > 0 {
 		r = append(r, s_symtab, s_strtab)
 	}
@@ -272,11 +287,20 @@ var s_rela_text = &section{
 	contents: rela_text,
 }
 
+*/
+// ".rela.data"
 var s_rela_data = &section{
-	header:   sh_rela_data,
+	sh_name: ".rela.data",
+	header: &sectionHeader{
+		sh_type:      0x04, // SHT_RELA
+		sh_flags:     0x40, // I ??
+//		sh_link:      0x05, // section idx of .symtab
+		sh_info:      0x02, // section idx of .data
+		sh_addralign: 0x08,
+		sh_entsize:   0x18,
+	},
 	contents: rela_data,
 }
-*/
 
 var s_data = &section{
 	sh_name: ".data",
@@ -363,18 +387,6 @@ var sh_rela_text = &sectionHeader{
 }
 */
 
-/*
-// ".rela.data"
-var sh_rela_data = &sectionHeader{
-	sh_name:      0x00,
-	sh_type:      0x04, // SHT_RELA
-	sh_flags:     0x40, // I ??
-	sh_link:      0x06,
-	sh_info:      0x03,
-	sh_addralign: 0x08,
-	sh_entsize:   0x18,
-}
-*/
 
 // https://reviews.llvm.org/D28950
 // The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
@@ -386,8 +398,7 @@ var sh_symtab = &sectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flags:     0,
 	sh_addr:      0,
-	sh_link:      0x05, // @TODO calculate dynamically
-	sh_info:      0x00, // this is set later
+//	sh_link:      0x05, // section index of .strtab ?
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -441,10 +452,14 @@ func makeSectionNames() []string {
 		sectionNames = append(sectionNames, ".symtab",".strtab")
 	}
 
+	var dataName string = ".data"
+	if needRelaData {
+		dataName = ".rela.data"
+	}
 	var names = []string{
 		".shstrtab",
 		".text", // or ".rela.text",
-		".data", // or ".rela.data",
+		dataName,
 		".bss",
 	}
 	sectionNames = append(sectionNames, names...)
@@ -469,7 +484,7 @@ func resolveShNames(ss []*section) {
 		idx := bytes.Index(s_shstrtab.contents, []byte(sh_name))
 		if idx <= 0 {
 			fmt.Fprintf(os.Stderr, "idx of sh %s = %d\n", s.sh_name, idx)
-			panic("invalid idx")
+			panic(  s.sh_name + " is not found in .strtab contents")
 		}
 		s.header.sh_name = uint32(idx)
 	}
@@ -595,7 +610,18 @@ func analyze(stmts []*statement) {
 }
 
 func buildSymbolTable() {
-
+	var index int
+	if needRelaData {
+		symbolTable = append(symbolTable, &symbolTableEntry{
+			st_name:  0,
+			st_info:  3, // SECTION
+			st_other: 0,
+			st_shndx: uint16(s_data.shndx),
+			st_value: 0,
+			st_size:  0,
+		})
+		index++
+	}
 	var orderedNonGlobalSymbols []string
 	var ordererGlobalSymbols []string
 	fmt.Fprintf(os.Stderr, "globalSymbols=%v\n", globalSymbols)
@@ -610,9 +636,9 @@ func buildSymbolTable() {
 	fmt.Fprintf(os.Stderr, "orderedAllsymbols=%v\n", orderedAllsymbols)
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
-	for i, symname := range orderedAllsymbols {
+	for _, symname := range orderedAllsymbols {
 		sym := p.allSymbolNames[symname]
-		num := i + 1
+		index++
 		var shndx int
 		switch sym.section {
 		case ".text":
@@ -641,8 +667,8 @@ func buildSymbolTable() {
 		if globalSymbols[sym.name] {
 			st_info = 0x10 // GLOBAL ?
 			if indexOfFirstNonLocalSymbol == 0 {
-				indexOfFirstNonLocalSymbol = num
-				fmt.Fprintf(os.Stderr, "indexOfFirstNonLocalSymbol=%d\n", num)
+				indexOfFirstNonLocalSymbol = index
+				fmt.Fprintf(os.Stderr, "indexOfFirstNonLocalSymbol=%d\n", indexOfFirstNonLocalSymbol)
 			}
 		}
 		fmt.Fprintf(os.Stderr, "symbol %s shndx = %d\n", sym.name, shndx)
@@ -657,6 +683,7 @@ func buildSymbolTable() {
 	}
 }
 
+var needRelaData bool
 func translateData(s *statement) []byte {
 	if s.labelSymbol != "" {
 		mapDataLabelAddr[s.labelSymbol] = currentDataAddr
@@ -664,20 +691,30 @@ func translateData(s *statement) []byte {
 
 	switch s.keySymbol {
 	case ".quad":
-		rawVal := s.operands[0].string
-		var i int64
-		if strings.HasPrefix(rawVal, "0x") {
-			var err error
-			i, err = strconv.ParseInt(rawVal, 0, 0)
-			if err != nil {
-				panic(err)
+		op := s.operands[0]
+		fmt.Fprintf(os.Stderr, ".quad type=%s\n", op.typ)
+		switch op.typ {
+		case "number":
+			rawVal := op.string
+			var i int64
+			if strings.HasPrefix(rawVal, "0x") {
+				var err error
+				i, err = strconv.ParseInt(rawVal, 0, 0)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				// TBI
 			}
-		} else {
-			// TBI
+			buf := (*[8]byte)(unsafe.Pointer(&i))
+			currentDataAddr += uintptr(len(buf))
+			return buf[:]
+		case "symbol":
+			needRelaData = true
+			return make([]byte, 8)
+		default:
+			panic("Unexpected op.typ:" + op.typ)
 		}
-		buf := (*[8]byte)(unsafe.Pointer(&i))
-		currentDataAddr += uintptr(len(buf))
-		return buf[:]
 	case "": // label
 		//panic("empty keySymbol:" + s.labelSymbol)
 	default:
@@ -894,11 +931,17 @@ func main() {
 	}
 
 
-
 	if len(symbols) > 0 {
 		makeSymbolTable()
 	}
+
+	s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
 	sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
+	if needRelaData {
+		s_rela_data.header.sh_link = uint32(s_symtab.shndx)
+		s_rela_data.header.sh_info = uint32(s_data.shndx)
+	}
+
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
 
