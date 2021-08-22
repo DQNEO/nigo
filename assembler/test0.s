@@ -3,6 +3,14 @@ var1:
   .quad 0x10
 var2:
   .quad var1
+var3:
+  .quad 0
+  .quad 0
+  .quad 0
+var4:
+  .quad var2
+var5:
+  .quad var4
 
 .text
 .global _start

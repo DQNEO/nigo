@@ -227,9 +227,17 @@ var rela_text = []byte{
 //           } Elf64_Rela;
 //
 var rela_data = []byte{
-	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset = 0x8
+	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
 	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
 	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
+
+	0x28 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
+	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
+	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
+
+	0x30 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
+	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
+	0x28 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
 }
 
 type sectionHeaderTable struct {
@@ -294,7 +302,6 @@ var s_rela_data = &section{
 	header: &sectionHeader{
 		sh_type:      0x04, // SHT_RELA
 		sh_flags:     0x40, // I ??
-//		sh_link:      0x05, // section idx of .symtab
 		sh_info:      0x02, // section idx of .data
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
@@ -654,6 +661,7 @@ func buildSymbolTable() {
 			if !ok {
 				panic("symbol not found from mapDataLabelAddr: " + sym.name)
 			}
+			fmt.Fprintf(os.Stderr, "@@@ data symbol %s has addr %x\n", sym.name, addr)
 			sym.address = uintptr(addr)
 			shndx = s_data.shndx
 		default:
@@ -707,7 +715,6 @@ func translateData(s *statement) []byte {
 				// TBI
 			}
 			buf := (*[8]byte)(unsafe.Pointer(&i))
-			currentDataAddr += uintptr(len(buf))
 			return buf[:]
 		case "symbol":
 			needRelaData = true
@@ -879,6 +886,7 @@ func assembleData(ss []*statement) []byte {
 	var data []byte
 	for _, s := range ss {
 		buf := translateData(s)
+		currentDataAddr += uintptr(len(buf))
 		data = append(data, buf...)
 	}
 	return data
