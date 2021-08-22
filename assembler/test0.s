@@ -7,8 +7,13 @@ var2:
 .text
 .global _start
 _start:
-  movl $0x11, %eax
+  movq $0x3c, %rax # sys_exit
+  movq $0x2a, %rdi # 42
+  syscall
+  ret
 
+myfunc1:
+  movl $0x11, %eax
   movl $0x11, %ecx
   movl $0x11, %edx
   movl $0x11, %ebx
@@ -28,12 +33,6 @@ _start:
   movq $0x11223344, %rbp
   movq $0x11223344, %rsi
   movq $0x11223344, %rdi
-  movq $0x3c, %rax # sys_exit
-  movq $0x2a, %rdi # 42
-  syscall
-  ret
-
-myfunc1:
   ret
 myfunc2:
   ret
