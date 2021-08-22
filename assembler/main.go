@@ -642,6 +642,25 @@ var insts = [][]byte{
 	movq0, movq1, movq2, movq3,
 }
 
+// The registers are encoded using the 4-bit values in the X.Reg column of the following table.
+// X.Reg is in binary.
+func regField(reg string) uint8 {
+	var x_reg uint8
+	switch reg {
+	case "ax": x_reg = 0b0000
+	case "cx": x_reg = 0b0001
+	case "dx": x_reg = 0b0010
+	case "bx": x_reg = 0b0011
+	case "sp": x_reg = 0b0100
+	case "bp": x_reg = 0b0101
+	case "si": x_reg = 0b0110
+	case "di": x_reg = 0b0111
+	default:
+		panic("TBI: unexpected register " + reg)
+	}
+	return x_reg
+}
+
 func translateCode(s *statement) []byte {
 	var r []byte
 	//fmt.Printf("[translator] %s (%d ops) => ", s.keySymbol, len(s.operands))
@@ -671,26 +690,8 @@ func translateCode(s *statement) []byte {
 		var num int32 = int32(intNum)
 		bytesNum := (*[4]byte)(unsafe.Pointer(&num))
 		var opcode byte
-		switch op2.string {
-		case "eax":
-			opcode = 0xb8
-		case "ecx":
-			opcode = 0xb9
-		case "edx":
-			opcode = 0xba
-		case "ebx":
-			opcode = 0xbb
-		case "esp":
-			opcode = 0xbc
-		case "ebp":
-			opcode = 0xbd
-		case "esi":
-			opcode = 0xbe
-		case "edi":
-			opcode = 0xbf
-		default:
-			panic("TBI: unexpected register " + op2.string)
-		}
+		regFieldN := regField(op2.string[1:])
+		opcode = 0xb8 + regFieldN
 		tmp := []byte{opcode}
 		r = append(tmp, (bytesNum[:])...)
 	case "movq":
