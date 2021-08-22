@@ -670,7 +670,16 @@ func translateCode(s *statement) []byte {
 		}
 		var num int32 = int32(intNum)
 		bytesNum := (*[4]byte)(unsafe.Pointer(&num))
-		tmp := []byte{0xb8}
+		var opcode byte
+		switch op2.string {
+		case "eax":
+			opcode = 0xb8
+		case "ecx":
+			opcode = 0xb9
+		default:
+			panic("TBI: unexpected register " + op2.string)
+		}
+		tmp := []byte{opcode}
 		r = append(tmp, (bytesNum[:])...)
 	case "movq":
 		r = insts[movqIdx]
