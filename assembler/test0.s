@@ -1,8 +1,8 @@
 .data
 
 .text
-.global main
-main:
+.global _start
+_start:
   movl $0x11, %eax
 
   movl $0x11, %ecx

@@ -411,17 +411,14 @@ func makeSymbolTable() {
 	}
 }
 
-var allSymbolNames = []string{
-	"main",
-}
 
 func makeStrTab() []byte {
 	var nameOffset uint32
 	var data []byte = []byte{0x00}
 	nameOffset++
-	for _, sym := range allSymbolNames {
+	for _, sym := range p.allSymbolNames {
 		//sym.nameOffset = nameOffset
-		buf := append([]byte(sym), 0x00)
+		buf := append([]byte(sym.name), 0x00)
 		data = append(data, buf...)
 		nameOffset += uint32(len(buf))
 	}
