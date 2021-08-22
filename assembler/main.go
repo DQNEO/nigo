@@ -420,13 +420,13 @@ func makeSymbolTable() {
 }
 
 
-func makeStrTab() []byte {
+func makeStrTab(symbols []string) []byte {
 	var nameOffset uint32
 	var data []byte = []byte{0x00}
 	nameOffset++
-	for _, sym := range p.allSymbolNames {
+	for _, sym := range symbols {
 		//sym.nameOffset = nameOffset
-		buf := append([]byte(sym.name), 0x00)
+		buf := append([]byte(sym), 0x00)
 		data = append(data, buf...)
 		nameOffset += uint32(len(buf))
 	}
@@ -492,7 +492,8 @@ type programStruct struct {
 	textStmts []*statement
 	dataStmts []*statement
 	symStruct symbolTableStruct
-	allSymbolNames []*symbolStruct // => contents of .strtab
+	allSymbolNames map[string]*symbolStruct
+	orderedSymbolNames []string
 }
 
 var p = &programStruct{}
@@ -501,10 +502,17 @@ var symbols []string
 var globalSymbols = make(map[string]bool)
 
 func analyze(stmts []*statement) {
+	var seenSymbols = make(map[string]bool)
 	var currentSection string
 	for _, s := range stmts {
 		if s == emptyStatement {
 			continue
+		}
+		if s.labelSymbol != "" {
+			if !seenSymbols[s.labelSymbol] {
+				p.orderedSymbolNames = append(p.orderedSymbolNames, s.labelSymbol)
+				seenSymbols[s.labelSymbol] = true
+			}
 		}
 		switch s.keySymbol {
 		case ".data":
@@ -526,6 +534,14 @@ func analyze(stmts []*statement) {
 			}
 		case ".text":
 			p.textStmts = append(p.textStmts, s)
+			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
+				sym := s.operands[0].string
+				if !seenSymbols[sym] {
+					p.orderedSymbolNames = append(p.orderedSymbolNames, sym)
+					seenSymbols[sym] = true
+				}
+			}
+
 			if s.labelSymbol != "" {
 				symbols = append(symbols, s.labelSymbol)
 				if globalSymbols[s.labelSymbol] {
@@ -539,49 +555,63 @@ func analyze(stmts []*statement) {
 
 	}
 
-	var allSymbols []*symbolStruct
+	var allSymbols = make(map[string]*symbolStruct)
+
 	for _, sym := range p.symStruct.dataSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
 //		}
-		allSymbols = append(allSymbols, &symbolStruct{
+		allSymbols[sym] = &symbolStruct{
 			name:    sym,
 			section: ".data",
 			address: 0,
-		})
+		}
 	}
 	for _, sym := range p.symStruct.localfuncSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
 //		}
-		allSymbols = append(allSymbols, &symbolStruct{
+		allSymbols[sym] = &symbolStruct{
 			name:    sym,
 			section: ".text",
 			address: 0,
-		})
+		}
 	}
 	for _, sym := range p.symStruct.globalfuncSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
 //		}
-		allSymbols = append(allSymbols, &symbolStruct{
+		allSymbols[sym] = &symbolStruct{
 			name:    sym,
 			section: ".text",
 			address: 0,
 			nameOffset: 1,
-		})
+		}
 	}
 	p.allSymbolNames = allSymbols
-//	fmt.Printf("%#v\n", allSymbols)
-//	panic("STOP")
 }
 
 func buildSymbolTable() {
-	s_strtab.contents = makeStrTab()
-	for i, sym := range p.allSymbolNames {
+
+	var orderedNonGlobalSymbols []string
+	var ordererGlobalSymbols []string
+	fmt.Fprintf(os.Stderr, "globalSymbols=%v\n", globalSymbols)
+	for _, sym := range p.orderedSymbolNames {
+		if globalSymbols[sym] {
+			ordererGlobalSymbols = append(ordererGlobalSymbols, sym)
+		} else {
+			orderedNonGlobalSymbols = append(orderedNonGlobalSymbols, sym)
+		}
+	}
+	orderedAllsymbols := append(orderedNonGlobalSymbols,ordererGlobalSymbols...)
+	fmt.Fprintf(os.Stderr, "orderedAllsymbols=%v\n", orderedAllsymbols)
+	s_strtab.contents = makeStrTab(orderedAllsymbols)
+
+	for i, symname := range orderedAllsymbols {
+		sym := p.allSymbolNames[symname]
 		num := i + 1
 		var shndx int
 		switch sym.section {
