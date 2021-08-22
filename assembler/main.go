@@ -371,15 +371,18 @@ var sh_rela_data = &sectionHeader{
 }
 */
 
+// https://reviews.llvm.org/D28950
+// The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
+
+var indexOfFirstNonLocalSymbol int
+
 // ".symtab"
 var sh_symtab = &sectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flags:     0,
 	sh_addr:      0,
 	sh_link:      0x05, // @TODO calculate dynamically
-	// https://reviews.llvm.org/D28950
-	// The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
-	sh_info:      0x01, // @TODO calculate dynamically
+	sh_info:      0x00, // this is set later
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
@@ -569,17 +572,22 @@ func analyze(stmts []*statement) {
 	p.allSymbolNames = allSymbols
 //	fmt.Printf("%#v\n", allSymbols)
 //	panic("STOP")
+}
 
-	if len(p.allSymbolNames) == 0 {
-		return
-	}
-
+func buildSymbolTable() {
 	s_strtab.contents = makeStrTab()
-	for _, sym := range allSymbols {
+	for i, sym := range p.allSymbolNames {
+		num := i + 1
 		var shndx uint16
 		switch sym.section {
 		case ".text":
 			shndx = 0x01
+			addr, ok := mapTextLabelAddr[sym.name]
+			if !ok {
+				panic("symbol not found from mapTextLabelAddr: " + sym.name)
+			}
+			//panic("sym.addreess should not be zero")
+			sym.address = uintptr(addr)
 		case ".data":
 			shndx = 0x03
 		default:
@@ -592,6 +600,10 @@ func analyze(stmts []*statement) {
 		var st_info uint8
 		if globalSymbols[sym.name] {
 			st_info = 0x10 // GLOBAL ?
+			if indexOfFirstNonLocalSymbol == 0 {
+				indexOfFirstNonLocalSymbol = num
+				fmt.Fprintf(os.Stderr, "indexOfFirstNonLocalSymbol=%d\n", num)
+			}
 		}
 		e := &symbolTableEntry{
 			st_name:  uint32(name_offset),
@@ -658,8 +670,14 @@ func regField(reg string) uint8 {
 	return x_reg
 }
 
+var mapTextLabelAddr = make(map[string]int)
+
 func translateCode(s *statement) []byte {
 	var r []byte
+
+	if s.labelSymbol != "" {
+		mapTextLabelAddr[s.labelSymbol] = currentTextAddr
+	}
 	//fmt.Printf("[translator] %s (%d ops) => ", s.keySymbol, len(s.operands))
 	switch s.keySymbol {
 	case "nop":
@@ -739,7 +757,7 @@ func translateCode(s *statement) []byte {
 	}
 
 	//fmt.Printf("=>  %#x\n", r)
-
+	currentTextAddr += len(r)
 	return r
 }
 
@@ -752,6 +770,8 @@ var addresses = map[string]uintptr{
 	"_start": 0,
 }
 */
+var currentTextAddr int
+
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
@@ -804,16 +824,16 @@ func main() {
 	dumpStmts(stmts)
 	analyze(stmts)
 
-	if len(p.allSymbolNames) > 0 {
-
-	}
-
 	//dumpProgram(p)
 	code := assembleCode(stmts)
 	//dumpCode(code)
 	//return
 	s_text.contents = code
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
+	if len(p.allSymbolNames) > 0 {
+		buildSymbolTable()
+	}
+
 
 	data := assembleData(p.dataStmts)
 	s_data.contents = data
@@ -821,6 +841,7 @@ func main() {
 	if len(symbols) > 0 {
 		makeSymbolTable()
 	}
+	sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
 

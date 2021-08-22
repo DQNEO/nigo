@@ -29,3 +29,9 @@ _start:
   syscall
   ret
 
+myfunc1:
+  ret
+myfunc2:
+  ret
+myfunc3:
+  ret
