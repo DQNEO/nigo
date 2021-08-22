@@ -22,4 +22,7 @@ main:
   movq $0x11223344, %rbp
   movq $0x11223344, %rsi
   movq $0x11223344, %rdi
+  movq $0x3c, %rax
+  movq $0x2a, %rdi
+  syscall
   ret
