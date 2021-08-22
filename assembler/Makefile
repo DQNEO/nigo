@@ -14,10 +14,10 @@ gnu.o.xxd: gnu.o
 	xxd -g 1 -c 8 $< > $@
 
 gnu.readelf: gnu.o
-	readelf -a -W $< > $@
+	./readelf.sh $< > $@
 
 my.readelf: my.o
-	readelf -a -W $< > $@
+	./readelf.sh $< > $@
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd
