@@ -646,7 +646,7 @@ func translateData(s *statement) []byte {
 			// TBI
 		}
 		buf := (*[8]byte)(unsafe.Pointer(&i))
-		currentDataAddr += len(buf)
+		currentDataAddr += uintptr(len(buf))
 		return buf[:]
 	case "": // label
 		//panic("empty keySymbol:" + s.labelSymbol)
@@ -686,8 +686,10 @@ func regField(reg string) uint8 {
 	return x_reg
 }
 
-var mapTextLabelAddr = make(map[string]int)
-var mapDataLabelAddr = make(map[string]int)
+var mapTextLabelAddr = make(map[string]uintptr)
+var mapDataLabelAddr = make(map[string]uintptr)
+
+var unresolvedCodeSymbols = make(map[uintptr]string)
 func translateCode(s *statement) []byte {
 	var r []byte
 
@@ -698,17 +700,11 @@ func translateCode(s *statement) []byte {
 	switch s.keySymbol {
 	case "nop":
 		r = []byte{0x90}
-	case "callq":
-		var dst byte
-		switch s.operands[0].string {
-		case "myfunc":
-			dst = 0x23
-		case "myfunc2":
-			dst = 0x1f
-		default:
-			panic("ERROR")
-		}
-		r =  []byte{0xe8, dst, 0, 0, 0}
+	case "callq","call":
+		target_symbol := s.operands[0].string
+		_ = target_symbol
+		r =  []byte{0xe8, 0, 0, 0, 0}
+		unresolvedCodeSymbols[currentTextAddr+1] = target_symbol
 	case "movl":
 		op1, op2 := s.operands[0], s.operands[1]
 		assert(op1.typ == "$number", "op1 type should be $number")
@@ -773,7 +769,7 @@ func translateCode(s *statement) []byte {
 	}
 
 	//fmt.Printf("=>  %#x\n", r)
-	currentTextAddr += len(r)
+	currentTextAddr += uintptr(len(r))
 	return r
 }
 
@@ -786,7 +782,7 @@ var addresses = map[string]uintptr{
 	"_start": 0,
 }
 */
-var currentTextAddr int
+var currentTextAddr uintptr
 
 func assembleCode(ss []*statement) []byte {
 	var code []byte
@@ -798,10 +794,19 @@ func assembleCode(ss []*statement) []byte {
 		code = append(code, buf...)
 	}
 
+	for addr, symbol := range unresolvedCodeSymbols {
+		fmt.Fprintf(os.Stderr, "unresolvedCodeSymbols: addr %x, symbol %s\n", addr, symbol)
+		target_addr, ok := mapTextLabelAddr[symbol]
+		if !ok {
+			panic("symbol not found from mapTextLabelAddr: " + symbol)
+		}
+		diff := target_addr - (addr + 4)
+		code[addr] = byte(diff) // @FIXME diff can be larget than a byte
+	}
 	return code
 }
 
-var currentDataAddr int
+var currentDataAddr uintptr
 
 func assembleData(ss []*statement) []byte {
 	var data []byte
