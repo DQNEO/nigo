@@ -20,8 +20,9 @@ my.readelf: my.o
 	./readelf.sh $< > $@
 
 .PHONY: diff
-diff: gnu.o.xxd my.o.xxd
-	diff --color -u my.o.xxd gnu.o.xxd
+diff: gnu.o.xxd my.o.xxd my.readelf gnu.readelf
+	diff --color -u my.readelf gnu.readelf
+	#diff --color -u my.o.xxd gnu.o.xxd
 	@echo ok
 
 test.bin: my.o
