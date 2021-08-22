@@ -676,6 +676,18 @@ func translateCode(s *statement) []byte {
 			opcode = 0xb8
 		case "ecx":
 			opcode = 0xb9
+		case "edx":
+			opcode = 0xba
+		case "ebx":
+			opcode = 0xbb
+		case "esp":
+			opcode = 0xbc
+		case "ebp":
+			opcode = 0xbd
+		case "esi":
+			opcode = 0xbe
+		case "edi":
+			opcode = 0xbf
 		default:
 			panic("TBI: unexpected register " + op2.string)
 		}
