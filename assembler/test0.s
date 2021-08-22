@@ -1,4 +1,8 @@
 .data
+var1:
+  .quad 0x10
+var2:
+  .quad 0x20
 
 .text
 .global _start

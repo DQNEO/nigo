@@ -137,10 +137,11 @@ type sectionHeader struct {
 }
 
 type section struct {
-	sh_name string
-	header *sectionHeader
+	sh_name    string
+	shndx      int
+	header     *sectionHeader
 	numZeroPad uintptr
-	contents []uint8
+	contents   []uint8
 }
 
 
@@ -238,8 +239,12 @@ func prepareSHTEntries() []*section {
 		r = append(r, s_symtab, s_strtab)
 	}
 	r = append(r, s_shstrtab)
+	for i, s := range r {
+		s.shndx = i
+	}
 	return r
 }
+
 var sht = &sectionHeaderTable{
 	sections: nil,
 }
@@ -578,10 +583,10 @@ func buildSymbolTable() {
 	s_strtab.contents = makeStrTab()
 	for i, sym := range p.allSymbolNames {
 		num := i + 1
-		var shndx uint16
+		var shndx int
 		switch sym.section {
 		case ".text":
-			shndx = 0x01
+			shndx = s_text.shndx
 			addr, ok := mapTextLabelAddr[sym.name]
 			if !ok {
 				panic("symbol not found from mapTextLabelAddr: " + sym.name)
@@ -589,7 +594,12 @@ func buildSymbolTable() {
 			//panic("sym.addreess should not be zero")
 			sym.address = uintptr(addr)
 		case ".data":
-			shndx = 0x03
+			addr, ok := mapDataLabelAddr[sym.name]
+			if !ok {
+				panic("symbol not found from mapDataLabelAddr: " + sym.name)
+			}
+			sym.address = uintptr(addr)
+			shndx = s_data.shndx
 		default:
 			panic("TBI")
 		}
@@ -605,11 +615,12 @@ func buildSymbolTable() {
 				fmt.Fprintf(os.Stderr, "indexOfFirstNonLocalSymbol=%d\n", num)
 			}
 		}
+		fmt.Fprintf(os.Stderr, "symbol %s shndx = %d\n", sym.name, shndx)
 		e := &symbolTableEntry{
 			st_name:  uint32(name_offset),
 			st_info:  st_info,
 			st_other: 0,
-			st_shndx: shndx,
+			st_shndx: uint16(shndx),
 			st_value: sym.address,
 		}
 		symbolTable = append(symbolTable, e)
@@ -617,6 +628,10 @@ func buildSymbolTable() {
 }
 
 func translateData(s *statement) []byte {
+	if s.labelSymbol != "" {
+		mapDataLabelAddr[s.labelSymbol] = currentDataAddr
+	}
+
 	switch s.keySymbol {
 	case ".quad":
 		rawVal := s.operands[0].string
@@ -631,6 +646,7 @@ func translateData(s *statement) []byte {
 			// TBI
 		}
 		buf := (*[8]byte)(unsafe.Pointer(&i))
+		currentDataAddr += len(buf)
 		return buf[:]
 	case "": // label
 		//panic("empty keySymbol:" + s.labelSymbol)
@@ -671,7 +687,7 @@ func regField(reg string) uint8 {
 }
 
 var mapTextLabelAddr = make(map[string]int)
-
+var mapDataLabelAddr = make(map[string]int)
 func translateCode(s *statement) []byte {
 	var r []byte
 
@@ -785,6 +801,8 @@ func assembleCode(ss []*statement) []byte {
 	return code
 }
 
+var currentDataAddr int
+
 func assembleData(ss []*statement) []byte {
 	var data []byte
 	for _, s := range ss {
@@ -829,14 +847,18 @@ func main() {
 	//dumpCode(code)
 	//return
 	s_text.contents = code
+
+	data := assembleData(p.dataStmts)
+	//fmt.Fprintf(os.Stderr, "mapDataLabelAddr=%v\n", mapDataLabelAddr)
+	s_data.contents = data
+
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
+	sht.sections = prepareSHTEntries()
 	if len(p.allSymbolNames) > 0 {
 		buildSymbolTable()
 	}
 
 
-	data := assembleData(p.dataStmts)
-	s_data.contents = data
 
 	if len(symbols) > 0 {
 		makeSymbolTable()
@@ -865,7 +887,6 @@ func main() {
 	e_shoff := shoff + sht.padding
 	elfHeader.e_shoff = e_shoff
 
-	sht.sections = prepareSHTEntries()
 
 	elfHeader.e_shnum = uint16(len(sht.sections))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
