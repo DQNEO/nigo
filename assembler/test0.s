@@ -1,8 +1,10 @@
 .data
+
 .text
 .global main
 main:
   movl $0x11, %eax
+
   movl $0x11, %ecx
   movl $0x11, %edx
   movl $0x11, %ebx
@@ -26,3 +28,4 @@ main:
   movq $0x2a, %rdi
   syscall
   ret
+

@@ -758,6 +758,9 @@ var addresses = map[string]uintptr{
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
+		if s.labelSymbol == "" && s.keySymbol == "" {
+			continue
+		}
 		buf := translateCode(s)
 		code = append(code, buf...)
 	}
