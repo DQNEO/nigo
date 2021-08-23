@@ -331,7 +331,8 @@ func buildSymbolTable(hasRelaData bool) {
 	for _, symname := range orderedAllsymbols {
 		sym, ok := allSymbols[symname]
 		if !ok {
-			panic("symbol not found :" + symname)
+			fmt.Fprintf(os.Stderr, "symbol not found :" + symname)
+			continue
 		}
 		index++
 		var shndx int
@@ -442,7 +443,11 @@ func regField(reg string) uint8 {
 	return x_reg
 }
 
-var unresolvedCodeSymbols = make(map[uintptr]string)
+type addrToReplace struct {
+	nextInstrAddr uintptr
+	symbolUsed string
+}
+var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
 // ModR/M
 // The ModR/M byte encodes a register or an opcode extension, and a register or a memory address. It has the following fields:
@@ -460,7 +465,16 @@ type relaTextUser struct {
 	uses string
 }
 var relaTextUsers []*relaTextUser
+
+func assert(bol bool, errorMsg string) {
+	if !bol {
+		panic("assert failed: " + errorMsg)
+	}
+}
+
+
 func translateCode(s *statement) []byte {
+	fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
 	var r []byte
 
 	if s.labelSymbol != "" {
@@ -470,11 +484,21 @@ func translateCode(s *statement) []byte {
 	switch s.keySymbol {
 	case "nop":
 		r = []byte{0x90}
-	case "callq","call":
+	case "jmp":
+		// EB cb
+		r = []byte{0xeb, 0}
 		target_symbol := s.operands[0].string
-		_ = target_symbol
+		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
+			nextInstrAddr: currentTextAddr + uintptr(len(r)),
+			symbolUsed:    target_symbol,
+		}
+	case "callq","call":
 		r =  []byte{0xe8, 0, 0, 0, 0}
-		unresolvedCodeSymbols[currentTextAddr+1] = target_symbol
+		target_symbol := s.operands[0].string
+		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
+			nextInstrAddr: currentTextAddr + uintptr(len(r)),
+			symbolUsed:    target_symbol,
+		}
 	case "movl":
 		op1, op2 := s.operands[0], s.operands[1]
 		assert(op1.typ == "$number", "op1 type should be $number")
@@ -491,12 +515,12 @@ func translateCode(s *statement) []byte {
 		opcode = 0xb8 + regFieldN
 		tmp := []byte{opcode}
 		r = append(tmp, (bytesNum[:])...)
-	case "movq":
+	case "leaq":
 		op1, op2 := s.operands[0], s.operands[1]
-//		assert(op1.typ == "$number", "op1 type should be $number")
+		//		assert(op1.typ == "$number", "op1 type should be $number")
 		assert(op2.typ == "register", "op2 type should be register")
 		switch {
-		case op1.typ == "$number": // movq $123, %regi
+		case op1.typ == "immediate": // movq $123, %regi
 			intNum, err := strconv.ParseInt(op1.string, 0, 32)
 			if err != nil {
 				panic(err)
@@ -513,7 +537,6 @@ func translateCode(s *statement) []byte {
 			if splitted[1] == "rip" {
 				// RIP relative addressing
 				var opcode uint8 = 0x8b
-
 				reg := regField(op2.string[1:])
 				modRM := composeModRM(0b000, reg, 0b101)
 				r = []byte{REX_W, opcode, modRM}
@@ -525,11 +548,68 @@ func translateCode(s *statement) []byte {
 				}
 				r = append(r,  0,0,0,0)
 				relaTextUsers = append(relaTextUsers, ru)
-			} else {
-				panic("TBI")
+			} else if splitted[1] == "rsp" {
+				var opcode uint8 = 0x8b
+				reg := regField(op2.string[1:])
+				modRM := composeModRM(0b000, reg, 0b101)
+				n, err := strconv.ParseInt(splitted[0], 0,8)
+				if err != nil {
+					panic(err)
+				}
+				r = []byte{REX_W, opcode, modRM, uint8(n)}
+				//				panic(fmt.Sprintf("r = %x", r))
 			}
 		default:
-			panic("TBI:"+ op1.string)
+			panic(fmt.Sprintf("TBI:%v", op1))
+		}
+	case "movq":
+		op1, op2 := s.operands[0], s.operands[1]
+//		assert(op1.typ == "$number", "op1 type should be $number")
+		//assert(op2.typ == "register", "op2 type should be register")
+		switch {
+		case op1.typ == "immediate": // movq $123, %regi
+			intNum, err := strconv.ParseInt(op1.string, 0, 32)
+			if err != nil {
+				panic(err)
+			}
+			var num int32 = int32(intNum)
+			bytesNum := (*[4]byte)(unsafe.Pointer(&num))
+			var opcode uint8 = 0xc7
+			regFieldN := regField(op2.string[1:])
+			var modRM uint8 = 0b11000000+ regFieldN
+			r = []byte{REX_W, opcode, modRM}
+			r = append(r, bytesNum[:]...)
+		case op1.typ == "register":
+			r = []byte{0,0,0,0}
+		case op1.typ == "indirection": // movq foo(%regi), %regi
+			splitted := strings.Split(op1.string, ",")
+			if splitted[1] == "rip" {
+				// RIP relative addressing
+				var opcode uint8 = 0x8b
+				reg := regField(op2.string[1:])
+				modRM := composeModRM(0b000, reg, 0b101)
+				r = []byte{REX_W, opcode, modRM}
+
+				symbol := splitted[0]
+				ru := &relaTextUser{
+					addr: currentTextAddr + uintptr(len(r)),
+					uses: symbol,
+				}
+				r = append(r,  0,0,0,0)
+				relaTextUsers = append(relaTextUsers, ru)
+			} else if splitted[1] == "rsp" {
+				var opcode uint8 = 0x8b
+				reg := regField(op2.string[1:])
+				modRM := composeModRM(0b000, reg, 0b101)
+				n, err := strconv.ParseInt(splitted[0], 0,8)
+				if err != nil {
+					panic(err)
+				}
+				r = []byte{REX_W, opcode, modRM, uint8(n)}
+//				panic(fmt.Sprintf("r = %x", r))
+			}
+		default:
+			panic(fmt.Sprintf("TBI:%v", op1))
 		}
 	case "addl":
 		op1, op2 := s.operands[0], s.operands[1]
@@ -548,6 +628,10 @@ func translateCode(s *statement) []byte {
 	case ".text":
 		//fmt.Printf(" skip\n")
 		return nil
+	case "imulq":
+	case "subq":
+	case "pushq":
+	case "popq":
 	default:
 		if strings.HasPrefix(s.keySymbol , ".") {
 			//fmt.Printf(" (directive)\n")
@@ -589,14 +673,19 @@ func assembleCode(ss []*statement) []byte {
 		code = append(code, buf...)
 	}
 
-	for addr, symbol := range unresolvedCodeSymbols {
-		fmt.Fprintf(os.Stderr, "unresolvedCodeSymbols: addr %x, symbol %s\n", addr, symbol)
-		sym, ok := allSymbols[symbol]
+	fmt.Fprintf(os.Stderr, "iterating unresolvedCodeSymbols...\n")
+	for codeAddr, replaceInfo := range unresolvedCodeSymbols {
+		sym, ok := allSymbols[replaceInfo.symbolUsed]
 		if !ok {
-			panic("symbol not found from mapTextLabelAddr: " + symbol)
+			fmt.Fprintf(os.Stderr, "  symbol not found: %s\n" , replaceInfo.symbolUsed)
+		} else {
+			fmt.Fprintf(os.Stderr, "  found symbol:%v\n", sym)
+			diff := sym.address - replaceInfo.nextInstrAddr
+			if diff > 255 {
+				panic("diff is too large")
+			}
+			code[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
 		}
-		diff := sym.address - (addr + 4)
-		code[addr] = byte(diff) // @FIXME diff can be larget than a byte
 	}
 	return code
 }
@@ -639,6 +728,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	stmts := parse()
 	dumpStmts(stmts)
 

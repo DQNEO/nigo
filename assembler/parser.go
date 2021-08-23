@@ -57,7 +57,7 @@ func readIndirection() (regi string) {
 	idx++
 	if source[idx] == '%' {
 		regi = readRegi()
-		assert(source[idx] == ')', "")
+		parserAssert(source[idx] == ')', "")
 		idx++
 
 	} else {
@@ -129,6 +129,7 @@ func readStringLiteral() string {
 
 func parseArith() string {
 	n := readNumber()
+	skipWhitespaces()
 	ch := source[idx]
 	switch ch {
 	case '+','-','*','/':
@@ -155,7 +156,6 @@ func readNumber() string {
 	}
 }
 
-
 func isDirective(symbol string) bool {
 	return len(symbol) > 0 && symbol[0] == '.'
 }
@@ -163,19 +163,33 @@ func isDirective(symbol string) bool {
 func parseOperand() *operand {
 	skipWhitespaces()
 	ch := source[idx]
-	assert(ch != '\n', "")
+	parserAssert(ch != '\n', "")
 
 	switch {
 	case isSymbolBeginning(ch):
 		symbol := readSymbol(ch)
-		if source[idx] == '(' {
+		switch source[idx] {
+		case '(':
 			// indirection e.g. 24(%rbp)
 			regi := readIndirection()
 			return &operand{
 				typ: "indirection",
 				string: fmt.Sprintf("%s,%s", symbol, regi),
 			}
-		} else {
+		case '+': // e.g. foo+8(%rip)
+			expect('+')
+			num := readNumber()
+			switch source[idx] {
+			case '(':
+				regi := readIndirection()
+				return &operand{
+					typ:    "indirection",
+					string: fmt.Sprintf("%s+%d,%s", symbol,num, regi),
+				}
+			default:
+				panic("Unexpected operand format")
+			}
+		default:
 			// just a symbol
 			return  &operand{
 				typ: "symbol",
@@ -210,12 +224,13 @@ func parseOperand() *operand {
 			string: fmt.Sprintf("%s",  regi),
 		}
 	case ch == '$':
+		// AT&T immediate operands are preceded by ‘$’;
 		idx++
-		// "$123" "$-7"
-		n := readNumber()
+		// "$123" "$-7", "$ 2 * 3"
+		e := parseArith()
 		return  &operand{
-			typ: "$number",
-			string :string(n),
+			typ: "immediate",
+			string :string(e),
 		}
 	case ch == '%':
 		regi := readRegi()
@@ -285,7 +300,7 @@ func parseFail(msg string) {
 	panic(msg + " at line " + strconv.Itoa(lineno))
 }
 
-func assert(bol bool, errorMsg string) {
+func parserAssert(bol bool, errorMsg string) {
 	if !bol {
 		parseFail("assert failed: " + errorMsg)
 	}
@@ -298,7 +313,7 @@ func consumeEOL() {
 	if idx == len(source) {
 		return
 	}
-	assert(source[idx] == '\n', "not newline, but got " + string(source[idx]))
+	parserAssert(source[idx] == '\n', "not newline, but got " + string(source[idx]))
 	idx++
 	lineno++
 }
@@ -331,7 +346,7 @@ func parseStmt() *statement {
 	//println("  got symbol " + symbol)
 	//println("(a) next char is  " + string(source[idx]) + ".")
 	if symbol == "" {
-		assert(atEOL(), "not at EOL")
+		parserAssert(atEOL(), "not at EOL")
 		consumeEOL()
 		return emptyStatement
 	}
@@ -349,7 +364,7 @@ func parseStmt() *statement {
 		keySymbol = trySymbol()
 		if len(keySymbol) == 0 {
 			skipWhitespaces()
-			assert(atEOL(), "not at EOL")
+			parserAssert(atEOL(), "not at EOL")
 			consumeEOL()
 			return stmt
 		}
