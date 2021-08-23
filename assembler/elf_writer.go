@@ -87,6 +87,53 @@ type ElfSectionBodies struct {
 	body  []uint8
 }
 
+//  An object file's symbol table holds information needed to locate
+//       and relocate a program's symbolic definitions and references.  A
+//       symbol table index is a subscript into this array.
+//
+//   typedef struct {
+//               uint32_t      st_name;
+//               unsigned char st_info;
+//               unsigned char st_other;
+//               uint16_t      st_shndx;
+//               Elf64_Addr    st_value;
+//               uint64_t      st_size;
+//           } Elf64_Sym;
+
+type symbolTableEntry struct {
+	// This member holds an index into the object file's symbol
+	//              string table, which holds character representations of the
+	//              symbol names.  If the value is nonzero, it represents a
+	//              string table index that gives the symbol name.  Otherwise,
+	//              the symbol has no name.
+	st_name uint32
+
+	/* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+	// #define STT_NOTYPE      0               /* Symbol type is unspecified */
+	// #define STT_OBJECT      1               /* Symbol is a data object */
+	// #define STT_FUNC        2               /* Symbol is a code object */
+	// #define STT_SECTION     3               /* Symbol associated with a section */
+	// #define STT_FILE        4               /* Symbol's name is file name */
+	// #define STT_COMMON      5               /* Symbol is a common data object */
+	// #define STT_TLS         6               /* Symbol is thread-local data object*/
+	// #define STT_NUM         7               /* Number of defined types.  */
+	// #define STT_LOOS        10              /* Start of OS-specific */
+	// #define STT_GNU_IFUNC   10              /* Symbol is indirect code object */
+	// #define STT_HIOS        12              /* End of OS-specific */
+	// #define STT_LOPROC      13              /* Start of processor-specific */
+	// #define STT_HIPROC      15              /* End of processor-specific */
+	st_info uint8
+	st_other uint8
+	//  Every symbol table entry is "defined" in relation to some
+	//  section.  This member holds the relevant section header
+	//  table index.
+	st_shndx uint16
+	// This member gives the value of the associated symbol.
+	st_value uintptr
+	st_size uint64
+}
+
+
 // # Part3: Section Header Table
 
 // https://man7.org/linux/man-pages/man5/elf.5.html
@@ -128,6 +175,8 @@ type ElfSectionHeader struct {
 	sh_addralign uintptr // 56
 	sh_entsize uintptr // 64
 }
+
+const SectionHeaderEntrySize = unsafe.Sizeof(ElfSectionHeader{})
 
 
 func (elfFile *ElfFile) writeTo(w io.Writer) {
