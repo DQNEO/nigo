@@ -312,7 +312,6 @@ var dataStmts []*statement
 var symStruct symbolTableStruct
 var allSymbolNames map[string]*symbolStruct
 var orderedSymbolNames []string
-var symbols []string
 var globalSymbols = make(map[string]bool)
 
 const STT_SECTION = 0x03
@@ -692,7 +691,6 @@ func main() {
 		case ".data":
 			dataStmts = append(dataStmts, s)
 			if s.labelSymbol != "" {
-				symbols = append(symbols, s.labelSymbol)
 				symStruct.dataSymbols = append(symStruct.dataSymbols, s.labelSymbol)
 			}
 		case ".text":
@@ -706,7 +704,6 @@ func main() {
 			}
 
 			if s.labelSymbol != "" {
-				symbols = append(symbols, s.labelSymbol)
 				if globalSymbols[s.labelSymbol] {
 					symStruct.globalfuncSymbols = append(symStruct.globalfuncSymbols, s.labelSymbol)
 				} else {
@@ -770,9 +767,6 @@ func main() {
 	sectionHeaders := prepareSHTEntries(len(relaTextUsers) > 0,len(relaDataUsers) > 0, len(allSymbolNames) > 0)
 	if len(allSymbolNames) > 0 {
 		buildSymbolTable()
-	}
-
-	if len(symbols) > 0 {
 		makeSymbolTable()
 	}
 
