@@ -388,10 +388,10 @@ func translateData(s *statement) []byte {
 	switch s.keySymbol {
 	case ".quad":
 		op := s.operands[0]
-		fmt.Fprintf(os.Stderr, ".quad type=%s\n", op.typ)
-		switch op.typ {
-		case "number":
-			rawVal := op.string
+		fmt.Fprintf(os.Stderr, ".quad type=%T\n", op.ifc)
+		switch opDtype := op.ifc.(type) {
+		case *numberExpr:
+			rawVal := opDtype.val
 			var i int64
 			if strings.HasPrefix(rawVal, "0x") {
 				var err error
@@ -404,15 +404,15 @@ func translateData(s *statement) []byte {
 			}
 			buf := (*[8]byte)(unsafe.Pointer(&i))
 			return buf[:]
-		case "symbol":
+		case *symbolExpr:
 			ru := &relaDataUser{
 				addr: currentDataAddr,
-				uses: op.string,
+				uses: opDtype.name,
 			}
 			relaDataUsers = append(relaDataUsers, ru)
 			return make([]byte, 8)
 		default:
-			panic("Unexpected op.typ:" + op.typ)
+			panic("Unexpected op.typ:")
 		}
 	case "": // label
 		//panic("empty keySymbol:" + s.labelSymbol)
@@ -422,11 +422,9 @@ func translateData(s *statement) []byte {
 	return nil
 }
 
-const REX_W byte = 0x48
-
 // The registers are encoded using the 4-bit values in the X.Reg column of the following table.
 // X.Reg is in binary.
-func regField(reg string) uint8 {
+func regBits(reg string) uint8 {
 	var x_reg uint8
 	switch reg {
 	case "ax": x_reg = 0b0000
@@ -434,7 +432,7 @@ func regField(reg string) uint8 {
 	case "dx": x_reg = 0b0010
 	case "bx": x_reg = 0b0011
 	case "sp": x_reg = 0b0100
-	case "bp": x_reg = 0b0101
+	case "bp": x_reg = 0b0101 // NONE
 	case "si": x_reg = 0b0110
 	case "di": x_reg = 0b0111
 	default:
@@ -487,6 +485,14 @@ func assert(bol bool, errorMsg string) {
 	}
 }
 
+const REX_W byte = 0x48
+
+const ModRegiToRegi uint8 = 0b11
+const ModIndirectionWithNoDisplacement uint8 = 0b00
+const ModIndirectionWithDisplacement8 uint8 = 0b01
+const ModIndirectionWithDisplacement32 uint8 = 0b10
+
+const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 
 func translateCode(s *statement) []byte {
 	//fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
@@ -502,50 +508,35 @@ func translateCode(s *statement) []byte {
 	case "jmp":
 		// EB cb
 		r = []byte{0xeb, 0}
-		target_symbol := s.operands[0].string
+		target_symbol := s.operands[0].ifc.(*symbolExpr).name
 		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
 			nextInstrAddr: currentTextAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
 	case "callq","call":
 		r =  []byte{0xe8, 0, 0, 0, 0}
-		target_symbol := s.operands[0].string
+		target_symbol := s.operands[0].ifc.(*symbolExpr).name
 		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
 			nextInstrAddr: currentTextAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
-	case "movl":
-		op1, op2 := s.operands[0], s.operands[1]
-		assert(op1.typ == "$number", "op1 type should be $number")
-		assert(op2.typ == "register", "op2 type should be register")
-		//fmt.Fprintf(os.Stderr, "op1,op2=%s,%s  ", op1, op2)
-		intNum, err := strconv.ParseInt(op1.string, 0, 32)
-		if err != nil {
-			panic(err)
-		}
-		var num int32 = int32(intNum)
-		bytesNum := (*[4]byte)(unsafe.Pointer(&num))
-		var opcode byte
-		regFieldN := regField(op2.string[1:])
-		opcode = 0xb8 + regFieldN
-		tmp := []byte{opcode}
-		r = append(tmp, (bytesNum[:])...)
 	case "leaq":
 		op1, op2 := s.operands[0], s.operands[1]
-		switch {
-		case op1.typ == "indirection": // movq foo(%regi), %regi
-			splitted := strings.Split(op1.string, ",")
-			if splitted[1] == "rip" {
+		switch op1dtype := op1.ifc.(type) {
+		case *indirection: // leaq foo(%regi), %regi
+			regi := op1dtype.regi
+			op2regi := op2.ifc.(*register)
+			if regi.name == "rip" {
 				// RIP relative addressing
 				panic(fmt.Sprintf("TBI:%v", op1))
-			} else if splitted[1] == "rsp" {
+			} else if regi.name == "rsp" {
 				var opcode uint8 = 0x8d
 				var mod uint8 = 0b01 // indirection with 8bit displacement
-				var rm = regField("sp")
-				reg := regField(op2.string[1:])
+				var rm = regBits("sp")
+				reg := op2regi.toBits()
 				modRM := composeModRM(mod, reg, rm)
 				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
-				num := splitted[0]
+				num := op1dtype.expr.(*numberExpr).val
 				displacement, err := strconv.ParseInt(num, 0, 8)
 				if err != nil {
 					panic(err)
@@ -555,60 +546,110 @@ func translateCode(s *statement) []byte {
 		default:
 			panic(fmt.Sprintf("TBI:%v", op1))
 		}
+	//case "movl":
+	//	op1, op2 := s.operands[0], s.operands[1]
+	//	assert(op1.typ == "$number", "op1 type should be $number")
+	//	//op1Regi, IsOp1Regi := op1.ifc.(*register)
+	//	op2Regi := op2.ifc.(*register)
+	//
+	//	//fmt.Fprintf(os.Stderr, "op1,op2=%s,%s  ", op1, op2)
+	//	intNum, err := strconv.ParseInt(op1.string, 0, 32)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	var num int32 = int32(intNum)
+	//	bytesNum := (*[4]byte)(unsafe.Pointer(&num))
+	//	var opcode byte
+	//	regFieldN := op2Regi.toBits()
+	//	opcode = 0xb8 + regFieldN
+	//	tmp := []byte{opcode}
+	//	r = append(tmp, (bytesNum[:])...)
 	case "movq":
-		op1, op2 := s.operands[0], s.operands[1]
+		 op2 := s.operands[1]
 //		assert(op1.typ == "$number", "op1 type should be $number")
 		//assert(op2.typ == "register", "op2 type should be register")
-		switch {
-		case op1.typ == "immediate": // movq $123, %regi
-			intNum, err := strconv.ParseInt(op1.string, 0, 32)
+		switch op1 := s.operands[0].ifc.(type) {
+		case *immediate: // movq $123, %regi
+			intNum, err := strconv.ParseInt(op1.expr, 0, 32)
 			if err != nil {
 				panic(err)
 			}
 			var num int32 = int32(intNum)
 			bytesNum := (*[4]byte)(unsafe.Pointer(&num))
 			var opcode uint8 = 0xc7
-			regFieldN := regField(op2.string[1:])
-			var modRM uint8 = 0b11000000+ regFieldN
+			var modRM uint8 = 0b11000000+ op2.ifc.(*register).toBits()
 			r = []byte{REX_W, opcode, modRM}
 			r = append(r, bytesNum[:]...)
-		case op1.typ == "register":
+		case *register:
 			var opcode uint8 = 0x89
-			switch op2.typ {
-			case "register":
-				const ModNoDisplacement uint8 = 0b11
-				mod := ModNoDisplacement
-				reg := regField(op1.string[1:]) // src
-				rm := regField(op2.string[1:])  // dst
+			switch op2dtype := op2.ifc.(type) {
+			case *register:
+				mod := ModRegiToRegi
+				reg := op1.toBits() // src
+				op2Regi := op2.ifc.(*register)
+				rm :=  op2Regi.toBits()  // dst
 				modRM := composeModRM(mod, reg, rm)
 				r = []byte{REX_W,opcode,modRM}
-			case "indirection":
-				panic(op2.string)
-//				splitted := strings.Split(op2.string, ",")
+			case *indirection:
+				if op2dtype.isRipRelative() {
+					switch expr := op2dtype.expr.(type) {
+					case *binaryExpr:
+						if true {
+
+							// REX.W 89 /r (MOV r/m64 r64, MR)
+							// "movq %rbx, runtime.__argv__+8(%rip)"
+							mod := ModIndirectionWithNoDisplacement
+							reg := op1.toBits() // src
+							rm := RM_SPECIAL_101
+							modRM := composeModRM(mod, reg, rm)
+							r = []byte{REX_W,opcode,modRM}
+
+							symbol := expr.left.(*symbolExpr).name
+
+							// @TODO shouud use expr.right.(*numberExpr).val as an offset
+							ru := &relaTextUser{
+								addr: currentTextAddr + uintptr(len(r)),
+								uses: symbol,
+							}
+
+							r = append(r,  0,0,0,0)
+
+							relaTextUsers = append(relaTextUsers, ru)
+						}
+					default:
+						panic("TBI:" + string(s.raw))
+					}
+				} else {
+					panic("TBI:" + string(s.raw))
+				}
 			default:
-				panic("unexpected op2.typ:" + op2.typ)
+				panic("unexpected op2.typ:")
 			}
-		case op1.typ == "indirection": // movq foo(%regi), %regi
-			splitted := strings.Split(op1.string, ",")
-			if splitted[1] == "rip" {
+		case *indirection: // movq foo(%regi), %regi
+			op1regi := op1.regi
+			op2regi := op2.ifc.(*register)
+			if op1regi.name == "rip" {
 				// RIP relative addressing
 				var opcode uint8 = 0x8b
-				reg := regField(op2.string[1:])
-				modRM := composeModRM(0b00, reg, 0b101)
+				reg := op2regi.toBits()
+				mod := ModRegiToRegi
+				modRM := composeModRM(mod, reg, 0b101)
 				r = []byte{REX_W, opcode, modRM}
 
-				symbol := splitted[0]
+				symbol := op1.expr.(*symbolExpr).name
 				ru := &relaTextUser{
 					addr: currentTextAddr + uintptr(len(r)),
 					uses: symbol,
 				}
+
 				r = append(r,  0,0,0,0)
+
 				relaTextUsers = append(relaTextUsers, ru)
-			} else if splitted[1] == "rsp" {
+			} else if op1regi.name  == "rsp" {
 				var opcode uint8 = 0x8b
 				var mod uint8 = 0b000 // indirection
-				var rm = regField("sp")
-				reg := regField(op2.string[1:])
+				var rm = regBits("sp")
+				reg := op2regi.toBits()
 				modRM := composeModRM(mod, reg, rm)
 				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
 				r = []byte{REX_W, opcode, modRM, sib}
@@ -617,11 +658,9 @@ func translateCode(s *statement) []byte {
 			panic(fmt.Sprintf("TBI:%v", op1))
 		}
 	case "addl":
-		op1, op2 := s.operands[0], s.operands[1]
-		assert(op1.typ == "register", "op1 type should be register")
-		assert(op2.typ == "register", "op2 type should be register")
+		_, op2 := s.operands[0], s.operands[1]
 		var opcode uint8 = 0x01
-		regFieldN := regField(op2.string[1:])
+		regFieldN := op2.ifc.(*register).toBits()
 		var modRM uint8 = 0b11000000+ regFieldN
 		r = []byte{opcode, modRM}
 	case "addq":
@@ -758,7 +797,7 @@ func main() {
 			currentSection = ".text"
 			continue
 		case ".global":
-			globalSymbols[s.operands[0].string] = true
+			globalSymbols[s.operands[0].ifc.(*symbolExpr).name] = true
 		}
 
 		switch currentSection {
@@ -773,7 +812,7 @@ func main() {
 		case ".text":
 			textStmts = append(textStmts, s)
 			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
-				sym := s.operands[0].string
+				sym := s.operands[0].ifc.(*symbolExpr).name
 				if !seenSymbols[sym] {
 					orderedSymbolNames = append(orderedSymbolNames, sym)
 					seenSymbols[sym] = true

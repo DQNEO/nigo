@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/DQNEO/babygo/lib/strconv"
 	"os"
-	"strings"
 )
 
 
@@ -53,17 +52,16 @@ func skipLineComment() {
 	}
 }
 
-func readIndirection() (regi string) {
-	idx++
+func readParenthRegister() *register {
+	expect('(')
 	if source[idx] == '%' {
-		regi = readRegi()
-		parserAssert(source[idx] == ')', "")
-		idx++
-
+		regi := readRegi()
+		expect(')')
+		return &register{name: regi}
 	} else {
 		parseFail("TBI")
+		return nil
 	}
-	return regi
 }
 
 func expect(ch byte) {
@@ -171,72 +169,86 @@ func parseOperand() *operand {
 		switch source[idx] {
 		case '(':
 			// indirection e.g. 24(%rbp)
-			regi := readIndirection()
+			regi := readParenthRegister()
 			return &operand{
-				typ: "indirection",
-				string: fmt.Sprintf("%s,%s", symbol, regi),
+				ifc : &indirection{
+					expr: &symbolExpr{
+						name: symbol,
+					},
+					regi: regi,
+				},
 			}
 		case '+': // e.g. foo+8(%rip)
 			expect('+')
 			num := readNumber()
 			switch source[idx] {
 			case '(':
-				regi := readIndirection()
+				regi := readParenthRegister()
 				return &operand{
-					typ:    "indirection",
-					string: fmt.Sprintf("%s+%s,%s", symbol,num, regi),
+					ifc : &indirection{
+						expr: &binaryExpr{
+							op:    "+",
+							left:  &symbolExpr{name: symbol},
+							right: &numberExpr{val: num},
+						},
+						regi: regi,
+					},
 				}
 			default:
 				panic("Unexpected operand format")
 			}
 		default:
 			// just a symbol
+			symExpr := &symbolExpr{name: symbol}
 			return  &operand{
-				typ: "symbol",
-				string :string(symbol),
+				ifc: symExpr,
 			}
 		}
 	case ch == '"':
 		s := readStringLiteral()
+		panic("TBI")
 		return  &operand{
-			typ: "stringliteral",
-			string :string("\"" + s + "\""),
+			ifc:s,
 		}
-	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"e
+	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"
 		n := parseArith()
 		if source[idx] == '(' {
 			// indirection e.g. 24(%rbp)
-			regi := readIndirection()
+			regi := readParenthRegister()
 			return &operand{
-				typ: "indirection",
-				string: fmt.Sprintf("%s,%s", n, regi),
+				ifc : &indirection{
+					expr: &numberExpr{val: n},
+					regi: regi,
+				},
 			}
 		} else {
 			// just a number
+			numExpr := &numberExpr{val: n}
 			return  &operand{
-				typ: "number",
-				string :string(n),
+				ifc: numExpr,
 			}
 		}
 	case ch == '(':
-		regi := readIndirection()
+		regi := readParenthRegister()
 		return &operand{
-			string: fmt.Sprintf("%s",  regi),
+			ifc : &indirection{
+				regi: regi,
+			},
 		}
 	case ch == '$':
 		// AT&T immediate operands are preceded by ‘$’;
-		idx++
+		expect('$')
 		// "$123" "$-7", "$ 2 * 3"
 		e := parseArith()
 		return  &operand{
-			typ: "immediate",
-			string :string(e),
+			ifc : &immediate{expr: e},
 		}
 	case ch == '%':
-		regi := readRegi()
+		regName := readRegi()
 		return  &operand{
-			typ: "register",
-			string :string(regi),
+			ifc: &register{
+				name: regName,
+			},
 		}
 	default:
 		parseFail("default:buf=" + string(source[idx:idx+4]))
@@ -279,10 +291,61 @@ var source []byte
 var idx int
 var lineno int = 1
 
-type operand struct {
-	typ string
-	string string
+type operandIfc interface{}
+
+type register struct {
+	name string // e.g. "rax"
 }
+
+func (reg *register) is64() bool {
+	return reg.name[0] == 'r'
+}
+
+func (reg *register) toBits() uint8 {
+	if reg.is64() {
+		return regBits(reg.name[1:])
+	} else {
+		return regBits(reg.name)
+	}
+}
+
+// e.g. (%reg), 24(%reg), -24(%reg), foo(%rip), foo+8(%rip)
+type indirection struct {
+	expr expr
+	regi *register
+}
+
+func (op *indirection) isRipRelative() bool {
+	return op.regi.name == "rip"
+}
+
+// $numberExpr
+type immediate struct {
+	expr string // "7", "-7", "2+3"
+}
+
+// unary number expression
+type numberExpr struct {
+	val string // "7", "-7", "2+3"
+}
+
+// "foo" in ".quad foo" or "foo(%rip)"
+type symbolExpr struct {
+	name string
+}
+
+type expr interface {}
+
+type binaryExpr struct {
+	op string /// "+" or "-"
+	left expr
+	right expr
+}
+
+type operand struct {
+	ifc operandIfc
+}
+
 
 type statement struct {
 	raw []byte
@@ -409,11 +472,11 @@ func dumpStmt(i int, stmt *statement) {
 	if stmt == emptyStatement {
 
 	} else {
-		var ops []string
-		for _, o := range stmt.operands {
-			ops = append(ops, o.string)
-		}
-		fmt.Fprintf(os.Stderr, "%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
+		//var ops []string
+		//for _, o := range stmt.operands {
+		//	ops = append(ops, o.string)
+		//}
+		//fmt.Fprintf(os.Stderr, "%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
 	}
 
 }
