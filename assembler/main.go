@@ -84,7 +84,7 @@ func makeSectionContentsOrder() []*section {
 		sections = append(sections, s_rela_text)
 	}
 
-	if needRelaData {
+	if len(relaDataUsers) > 0 {
 		sections = append(sections, s_rela_data)
 	}
 
@@ -167,7 +167,7 @@ func prepareSHTEntries() []*section {
 
 	r = append(r, s_data)
 
-	if needRelaData {
+	if len(relaDataUsers) > 0 {
 		r = append(r, s_rela_data)
 	}
 	r = append(r, s_bss)
@@ -361,7 +361,7 @@ func makeSectionNames() []string {
 	}
 
 	var dataName string = ".data"
-	if needRelaData {
+	if len(relaDataUsers)> 0 {
 		dataName = ".rela.data"
 	}
 
@@ -525,7 +525,7 @@ func analyze(stmts []*statement) {
 
 func buildSymbolTable() {
 	var index int
-	if needRelaData {
+	if len(relaDataUsers)> 0 {
 		symbolTable = append(symbolTable, &symbolTableEntry{
 			st_name:  0,
 			st_info:  3, // SECTION
@@ -598,7 +598,6 @@ func buildSymbolTable() {
 	}
 }
 
-var needRelaData bool
 type relaDataUser struct {
 	addr uintptr
 	uses string
@@ -636,7 +635,6 @@ func translateData(s *statement) []byte {
 				uses: op.string,
 			}
 			relaDataUsers = append(relaDataUsers, ru)
-			needRelaData = true
 			return make([]byte, 8)
 		default:
 			panic("Unexpected op.typ:" + op.typ)
@@ -924,7 +922,7 @@ func main() {
 
 	s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
 	sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
-	if needRelaData {
+	if len(relaDataUsers) > 0 {
 		s_rela_data.header.sh_link = uint32(s_symtab.shndx)
 		s_rela_data.header.sh_info = uint32(s_data.shndx)
 	}
