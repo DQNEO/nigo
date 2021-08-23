@@ -302,7 +302,7 @@ type symbolStruct struct {
 var textStmts []*statement
 var dataStmts []*statement
 var symStruct symbolTableStruct
-var allSymbolNames map[string]*symbolStruct
+var allSymbols = make(map[string]*symbolStruct)
 var orderedSymbolNames []string
 var globalSymbols = make(map[string]bool)
 
@@ -336,7 +336,7 @@ func buildSymbolTable(hasRelaData bool) {
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
 	for _, symname := range orderedAllsymbols {
-		sym := allSymbolNames[symname]
+		sym := allSymbols[symname]
 		index++
 		var shndx int
 		switch sym.section {
@@ -712,7 +712,6 @@ func main() {
 
 	}
 
-	var allSymbols = make(map[string]*symbolStruct)
 
 	for _, sym := range symStruct.dataSymbols {
 		//		addr, ok := addresses[sym]
@@ -748,10 +747,9 @@ func main() {
 			nameOffset: 1,
 		}
 	}
-	allSymbolNames = allSymbols
 
 	//dumpProgram(p)
-	code := assembleCode(stmts)
+	code := assembleCode(textStmts)
 	//dumpCode(code)
 	//return
 	s_text.contents = code
@@ -763,9 +761,9 @@ func main() {
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 	hasRelaText := len(relaTextUsers) > 0
 	hasRelaData := len(relaDataUsers) > 0
-	hasSymbols := len(allSymbolNames) > 0
+	hasSymbols := len(allSymbols) > 0
 	sectionHeaders := prepareSHTEntries(hasRelaText,hasRelaData, hasSymbols)
-	if len(allSymbolNames) > 0 {
+	if len(allSymbols) > 0 {
 		buildSymbolTable(hasRelaData)
 	}
 
@@ -801,9 +799,6 @@ func main() {
 		for _ , ru := range relaTextUsers {
 			fmt.Fprintf(os.Stderr, "re.uses:%s\n", ru.uses)
 			addend, ok := mapTextLabelAddr[ru.uses]
-			if !ok {
-				panic("label not found")
-			}
 			if addend == 0 {
 				addend, ok = mapDataLabelAddr[ru.uses]
 				if !ok {
