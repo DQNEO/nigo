@@ -89,10 +89,6 @@ var elfHeader = &Elf64_Ehdr{
 }
 
 // # Part3: Section Header Table
-type sectionHeaderTable struct {
-	padding  uintptr
-	sections []*section
-}
 
 // https://man7.org/linux/man-pages/man5/elf.5.html
 //   typedef struct { //               uint32_t   sh_name;

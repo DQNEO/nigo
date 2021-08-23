@@ -181,10 +181,6 @@ func prepareSHTEntries() []*section {
 	return r
 }
 
-var sht = &sectionHeaderTable{
-	sections: nil,
-}
-
 var s_null = &section{
 	header: &ElfSectionHeader{},
 }
@@ -898,7 +894,7 @@ func main() {
 	s_data.contents = data
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
-	sht.sections = prepareSHTEntries()
+	shtSections := prepareSHTEntries()
 	if len(p.allSymbolNames) > 0 {
 		buildSymbolTable()
 	}
@@ -987,20 +983,21 @@ func main() {
 	}
 
 	shoff := (s_shstrtab.header.sh_offset + s_shstrtab.header.sh_size)
+	var paddingBeforeSHT uintptr
 	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
 	mod := shoff % 8
 	if mod != 0 {
-		sht.padding = 8 - mod
+		paddingBeforeSHT = 8 - mod
 	}
-	e_shoff := shoff + sht.padding
+	e_shoff := shoff + paddingBeforeSHT
 	elfHeader.e_shoff = e_shoff
 
 
-	elfHeader.e_shnum = uint16(len(sht.sections))
+	elfHeader.e_shnum = uint16(len(shtSections))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
 	// prepare ELF File format
-	elfFile := prepareElfFile(elfHeader, sectionsOrderByContents, sht.padding, sht.sections)
+	elfFile := prepareElfFile(elfHeader, sectionsOrderByContents, paddingBeforeSHT, shtSections)
 	elfFile.writeTo(os.Stdout)
 }
 
