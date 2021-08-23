@@ -18,22 +18,22 @@ type section struct {
 	contents   []uint8
 }
 
-func buildSectionBodies() []*section {
+func buildSectionBodies(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 	var sections = []*section{
 		s_text, // .text
 		s_data, // .data
 		s_bss,  // .bss (no contents)
 	}
 
-	if len(allSymbolNames) > 0 {
+	if hasSymbols {
 		sections = append(sections, s_symtab, s_strtab)
 	}
 
-	if len(relaTextUsers) > 0 {
+	if hasRelaText {
 		sections = append(sections, s_rela_text)
 	}
 
-	if len(relaDataUsers) > 0 {
+	if hasRelaData {
 		sections = append(sections, s_rela_data)
 	}
 
@@ -235,20 +235,20 @@ func makeStrTab(symbols []string) []byte {
 	return data
 }
 
-func makeSectionNames() []string {
+func makeSectionNames(hasRelaText, hasRelaData, hasSymbols bool) []string {
 	var sectionNames []string
 
-	if len(allSymbolNames) > 0 {
+	if hasSymbols {
 		sectionNames = append(sectionNames, ".symtab",".strtab")
 	}
 
 	var dataName string = ".data"
-	if len(relaDataUsers)> 0 {
+	if hasRelaData {
 		dataName = ".rela.data"
 	}
 
 	var textName = ".text"
-	if len(relaTextUsers) > 0 {
+	if hasRelaText {
 		textName = ".rela.text"
 	}
 
@@ -308,9 +308,9 @@ var globalSymbols = make(map[string]bool)
 
 const STT_SECTION = 0x03
 
-func buildSymbolTable() {
+func buildSymbolTable(hasRelaData bool) {
 	var index int
-	if len(relaDataUsers)> 0 {
+	if hasRelaData {
 		symbolTable = append(symbolTable, &ElfSym{
 			st_name:  0,
 			st_info:  STT_SECTION,
@@ -761,9 +761,12 @@ func main() {
 	s_data.contents = data
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
-	sectionHeaders := prepareSHTEntries(len(relaTextUsers) > 0,len(relaDataUsers) > 0, len(allSymbolNames) > 0)
+	hasRelaText := len(relaTextUsers) > 0
+	hasRelaData := len(relaDataUsers) > 0
+	hasSymbols := len(allSymbolNames) > 0
+	sectionHeaders := prepareSHTEntries(hasRelaText,hasRelaData, hasSymbols)
 	if len(allSymbolNames) > 0 {
-		buildSymbolTable()
+		buildSymbolTable(hasRelaData)
 	}
 
 	// build rela_data contents
@@ -830,10 +833,10 @@ func main() {
 //		}
 	}
 
-	sectionNames := makeSectionNames()
+	sectionNames := makeSectionNames(hasRelaText,hasRelaData, hasSymbols)
 	makeShStrTab(sectionNames)
 
-	sectionBodies := buildSectionBodies()
+	sectionBodies := buildSectionBodies(hasRelaText,hasRelaData, hasSymbols)
 	resolveShNames(sectionBodies)
 
 	// prepare ELF File format
