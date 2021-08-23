@@ -286,22 +286,15 @@ func resolveShNames(ss []*section) {
 	}
 }
 
-type symbolTableStruct struct {
-	dataSymbols []string
-	localfuncSymbols []string
-	globalfuncSymbols []string
-}
-
 type symbolStruct struct {
 	name       string
-	nameOffset uint32
 	section    string
 	address uintptr
 }
 
 var textStmts []*statement
 var dataStmts []*statement
-var symStruct symbolTableStruct
+
 var allSymbols = make(map[string]*symbolStruct)
 var orderedSymbolNames []string
 var globalSymbols = make(map[string]bool)
@@ -676,7 +669,10 @@ func main() {
 		case ".data":
 			dataStmts = append(dataStmts, s)
 			if s.labelSymbol != "" {
-				symStruct.dataSymbols = append(symStruct.dataSymbols, s.labelSymbol)
+				allSymbols[s.labelSymbol] = &symbolStruct{
+					name:    s.labelSymbol,
+					section: ".data",
+				}
 			}
 		case ".text":
 			textStmts = append(textStmts, s)
@@ -687,53 +683,15 @@ func main() {
 					seenSymbols[sym] = true
 				}
 			}
-
 			if s.labelSymbol != "" {
-				if globalSymbols[s.labelSymbol] {
-					symStruct.globalfuncSymbols = append(symStruct.globalfuncSymbols, s.labelSymbol)
-				} else {
-					symStruct.localfuncSymbols = append(symStruct.localfuncSymbols, s.labelSymbol)
+				allSymbols[s.labelSymbol] = &symbolStruct{
+					name:    s.labelSymbol,
+					section: ".text",
 				}
 			}
 		default:
 		}
 
-	}
-
-
-	for _, sym := range symStruct.dataSymbols {
-		//		addr, ok := addresses[sym]
-		//		if !ok {
-		////			panic("address not found")
-		//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".data",
-			address: 0,
-		}
-	}
-	for _, sym := range symStruct.localfuncSymbols {
-		//		addr, ok := addresses[sym]
-		//		if !ok {
-		////			panic("address not found")
-		//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".text",
-			address: 0,
-		}
-	}
-	for _, sym := range symStruct.globalfuncSymbols {
-		//		addr, ok := addresses[sym]
-		//		if !ok {
-		////			panic("address not found")
-		//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".text",
-			address: 0,
-			nameOffset: 1,
-		}
 	}
 
 	//dumpProgram(p)
