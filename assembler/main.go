@@ -450,14 +450,29 @@ type addrToReplace struct {
 var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
 // ModR/M
+// https://wiki.osdev.org/X86-64_Instruction_Encoding#ModR.2FM
 // The ModR/M byte encodes a register or an opcode extension, and a register or a memory address. It has the following fields:
 //
-//   7   6   5   4   3   2   1   0
-// +---+---+---+---+---+---+---+---+
-// |  mod  |    reg    |     rm    |
-// +---+---+---+---+---+---+---+---+
+//    7   6   5   4   3   2   1   0
+//  +---+---+---+---+---+---+---+---+
+//  |  mod  |    reg    |     rm    |
+//  +---+---+---+---+---+---+---+---+
 func composeModRM(mod byte, reg byte, rm byte) byte {
-	return mod * 32 + reg * 8 + rm
+	return mod * 64 + reg * 8 + rm
+}
+
+// SIB
+// https://wiki.osdev.org/X86-64_Instruction_Encoding#SIB
+
+const SibIndexNone uint8 = 0b100
+const SibBaseRSP uint8 = 0b100
+
+//     7                           0
+//  +---+---+---+---+---+---+---+---+
+//  | scale |   index   |    base   |
+//  +---+---+---+---+---+---+---+---+
+func composeSIB(scale byte, index byte, base byte) byte {
+	return scale* 32 + index* 8 + base
 }
 
 type relaTextUser struct {
@@ -474,7 +489,7 @@ func assert(bol bool, errorMsg string) {
 
 
 func translateCode(s *statement) []byte {
-	fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
+	//fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
 	var r []byte
 
 	if s.labelSymbol != "" {
@@ -517,47 +532,25 @@ func translateCode(s *statement) []byte {
 		r = append(tmp, (bytesNum[:])...)
 	case "leaq":
 		op1, op2 := s.operands[0], s.operands[1]
-		//		assert(op1.typ == "$number", "op1 type should be $number")
-		assert(op2.typ == "register", "op2 type should be register")
 		switch {
-		case op1.typ == "immediate": // movq $123, %regi
-			intNum, err := strconv.ParseInt(op1.string, 0, 32)
-			if err != nil {
-				panic(err)
-			}
-			var num int32 = int32(intNum)
-			bytesNum := (*[4]byte)(unsafe.Pointer(&num))
-			var opcode uint8 = 0xc7
-			regFieldN := regField(op2.string[1:])
-			var modRM uint8 = 0b11000000+ regFieldN
-			r = []byte{REX_W, opcode, modRM}
-			r = append(r, bytesNum[:]...)
 		case op1.typ == "indirection": // movq foo(%regi), %regi
 			splitted := strings.Split(op1.string, ",")
 			if splitted[1] == "rip" {
 				// RIP relative addressing
-				var opcode uint8 = 0x8b
-				reg := regField(op2.string[1:])
-				modRM := composeModRM(0b000, reg, 0b101)
-				r = []byte{REX_W, opcode, modRM}
-
-				symbol := splitted[0]
-				ru := &relaTextUser{
-					addr: currentTextAddr + uintptr(len(r)),
-					uses: symbol,
-				}
-				r = append(r,  0,0,0,0)
-				relaTextUsers = append(relaTextUsers, ru)
+				panic(fmt.Sprintf("TBI:%v", op1))
 			} else if splitted[1] == "rsp" {
-				var opcode uint8 = 0x8b
+				var opcode uint8 = 0x8d
+				var mod uint8 = 0b01 // indirection with 8bit displacement
+				var rm = regField("sp")
 				reg := regField(op2.string[1:])
-				modRM := composeModRM(0b000, reg, 0b101)
-				n, err := strconv.ParseInt(splitted[0], 0,8)
+				modRM := composeModRM(mod, reg, rm)
+				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
+				num := splitted[0]
+				displacement, err := strconv.ParseInt(num, 0, 8)
 				if err != nil {
 					panic(err)
 				}
-				r = []byte{REX_W, opcode, modRM, uint8(n)}
-				//				panic(fmt.Sprintf("r = %x", r))
+				r = []byte{REX_W, opcode, modRM, sib, uint8(displacement)}
 			}
 		default:
 			panic(fmt.Sprintf("TBI:%v", op1))
@@ -580,14 +573,28 @@ func translateCode(s *statement) []byte {
 			r = []byte{REX_W, opcode, modRM}
 			r = append(r, bytesNum[:]...)
 		case op1.typ == "register":
-			r = []byte{0,0,0,0}
+			var opcode uint8 = 0x89
+			switch op2.typ {
+			case "register":
+				const ModNoDisplacement uint8 = 0b11
+				mod := ModNoDisplacement
+				reg := regField(op1.string[1:]) // src
+				rm := regField(op2.string[1:])  // dst
+				modRM := composeModRM(mod, reg, rm)
+				r = []byte{REX_W,opcode,modRM}
+			case "indirection":
+				panic(op2.string)
+//				splitted := strings.Split(op2.string, ",")
+			default:
+				panic("unexpected op2.typ:" + op2.typ)
+			}
 		case op1.typ == "indirection": // movq foo(%regi), %regi
 			splitted := strings.Split(op1.string, ",")
 			if splitted[1] == "rip" {
 				// RIP relative addressing
 				var opcode uint8 = 0x8b
 				reg := regField(op2.string[1:])
-				modRM := composeModRM(0b000, reg, 0b101)
+				modRM := composeModRM(0b00, reg, 0b101)
 				r = []byte{REX_W, opcode, modRM}
 
 				symbol := splitted[0]
@@ -599,14 +606,12 @@ func translateCode(s *statement) []byte {
 				relaTextUsers = append(relaTextUsers, ru)
 			} else if splitted[1] == "rsp" {
 				var opcode uint8 = 0x8b
+				var mod uint8 = 0b000 // indirection
+				var rm = regField("sp")
 				reg := regField(op2.string[1:])
-				modRM := composeModRM(0b000, reg, 0b101)
-				n, err := strconv.ParseInt(splitted[0], 0,8)
-				if err != nil {
-					panic(err)
-				}
-				r = []byte{REX_W, opcode, modRM, uint8(n)}
-//				panic(fmt.Sprintf("r = %x", r))
+				modRM := composeModRM(mod, reg, rm)
+				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
+				r = []byte{REX_W, opcode, modRM, sib}
 			}
 		default:
 			panic(fmt.Sprintf("TBI:%v", op1))
@@ -663,6 +668,14 @@ var addresses = map[string]uintptr{
 */
 var currentTextAddr uintptr
 
+func dumpCode(code []byte) string {
+	var r []string = make([]string, len(code))
+	for i, b := range code {
+		r[i] = fmt.Sprintf("%02x", b)
+	}
+	return strings.Join(r, " ")
+}
+
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
@@ -670,6 +683,7 @@ func assembleCode(ss []*statement) []byte {
 			continue
 		}
 		buf := translateCode(s)
+		fmt.Fprintf(os.Stderr, "[encoder] %s\t=>\t%s\n", s.raw,  dumpCode(buf))
 		code = append(code, buf...)
 	}
 
@@ -711,14 +725,6 @@ func dumpProgram() {
 	for _, stmt := range textStmts {
 		dumpStmt(0, stmt)
 	}
-}
-
-func dumpCode(code []byte) {
-	fmt.Printf("[dumping code]\n")
-	for _, c := range code {
-		fmt.Printf("%x ", c)
-	}
-	fmt.Println()
 }
 
 func main() {

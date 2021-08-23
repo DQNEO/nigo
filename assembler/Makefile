@@ -1,10 +1,12 @@
+.PHONEY: run
+run: my.o
+
 .PHONEY: test
 test: gnu.o.xxd gnu.readelf my.o.xxd my.readelf diff
-
-my.o: test0.s main.go parser.go elf_writer.go
+my.o:  ../src/runtime/runtime.s main.go parser.go elf_writer.go
 	go run main.go parser.go elf_writer.go < $< > $@
 
-gnu.o: test0.s
+gnu.o: ../src/runtime/runtime.s
 	as -o $@ $<
 
 my.o.xxd: my.o

@@ -184,7 +184,7 @@ func parseOperand() *operand {
 				regi := readIndirection()
 				return &operand{
 					typ:    "indirection",
-					string: fmt.Sprintf("%s+%d,%s", symbol,num, regi),
+					string: fmt.Sprintf("%s+%s,%s", symbol,num, regi),
 				}
 			default:
 				panic("Unexpected operand format")
@@ -281,10 +281,11 @@ var lineno int = 1
 
 type operand struct {
 	typ string
-	string
+	string string
 }
 
 type statement struct {
+	raw []byte
 	labelSymbol string
 	keySymbol   string
 	operands    []*operand
@@ -394,7 +395,10 @@ func parse() []*statement {
 	var i int = 1
 	for idx < len(source) {
 		//println(i, " reading...")
+		idxBegin := idx
 		s := parseStmt()
+		idxEnd := idx
+		s.raw = source[idxBegin:idxEnd-1]
 		stmts = append(stmts, s)
 		i++
 	}
