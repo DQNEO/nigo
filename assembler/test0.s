@@ -21,6 +21,8 @@ _start:
   ret
 
 myfunc1:
+#  movq (%rax), %rax
+  movq var1(%rip), %rcx
   ret
 myfunc2:
   movq $0x3c, %rax # sys_exit

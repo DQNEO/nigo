@@ -173,7 +173,7 @@ func parseOperand() *operand {
 			regi := readIndirection()
 			return &operand{
 				typ: "indirection",
-				string: fmt.Sprintf("indirect %s(%s)", symbol, regi),
+				string: fmt.Sprintf("%s,%s", symbol, regi),
 			}
 		} else {
 			// just a symbol
@@ -195,7 +195,7 @@ func parseOperand() *operand {
 			regi := readIndirection()
 			return &operand{
 				typ: "indirection",
-				string: fmt.Sprintf("indirect %s(%s)", n, regi),
+				string: fmt.Sprintf("%s,%s", n, regi),
 			}
 		} else {
 			// just a number
@@ -207,7 +207,7 @@ func parseOperand() *operand {
 	case ch == '(':
 		regi := readIndirection()
 		return &operand{
-			string: fmt.Sprintf("indirect (%s)",  regi),
+			string: fmt.Sprintf("%s",  regi),
 		}
 	case ch == '$':
 		idx++

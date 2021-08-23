@@ -99,8 +99,7 @@ type symbolTableEntry struct {
 }
 
 // https://man7.org/linux/man-pages/man5/elf.5.html
-//   typedef struct {
-//               uint32_t   sh_name;
+//   typedef struct { //               uint32_t   sh_name;
 //               uint32_t   sh_type;
 //               uint64_t   sh_flags;
 //               Elf64_Addr sh_addr;
@@ -184,11 +183,15 @@ func makeSectionContentsOrder() []*section {
 		s_data, // .data
 		s_bss,  // .bss (no contents)
 	}
+
 	if len(p.allSymbolNames) > 0 {
 		sections = append(sections, s_symtab, s_strtab)
 	}
 
-	//append s_rela_text,
+	if len(relaTextUsers) > 0 {
+		sections = append(sections, s_rela_text)
+	}
+
 	if needRelaData {
 		sections = append(sections, s_rela_data)
 	}
@@ -270,10 +273,13 @@ func prepareSHTEntries() []*section {
 	r := []*section{
 		s_null,      // NULL
 		s_text,      // .text
-		//		sh_rela_text, // .rela.text
-		s_data,      // .data
-		//		sh_rela_data, // .rela.data
 	}
+
+	if len(relaTextUsers) > 0 {
+		r = append(r, s_rela_text)
+	}
+
+	r = append(r, s_data)
 
 	if needRelaData {
 		r = append(r, s_rela_data)
@@ -310,13 +316,20 @@ var s_text = &section{
 	},
 	contents: nil,
 }
-/*
+
 var s_rela_text = &section{
-	header:   sh_rela_text,
-	contents: rela_text,
+	sh_name: ".rela.text",
+	header: &sectionHeader{
+		sh_type:      0x04, // SHT_RELA
+		sh_flags:     0x40, // * ??
+		sh_link:      0x06,
+		sh_info:      0x01,
+		sh_addralign: 0x08,
+		sh_entsize:   0x18,
+	},
+	contents: nil,
 }
 
-*/
 // ".rela.data"
 var s_rela_data = &section{
 	sh_name: ".rela.data",
@@ -401,21 +414,6 @@ var s_strtab = &section{
 	contents: nil,
 }
 
-
-/*
-// ".rela.text"
-var sh_rela_text = &sectionHeader{
-	sh_name:      0x00,
-	sh_type:      0x04, // SHT_RELA
-	sh_flags:     0x40, // * ??
-	sh_link:      0x06,
-	sh_info:      0x01,
-	sh_addralign: 0x08,
-	sh_entsize:   0x18,
-}
-*/
-
-
 // https://reviews.llvm.org/D28950
 // The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
 
@@ -484,9 +482,15 @@ func makeSectionNames() []string {
 	if needRelaData {
 		dataName = ".rela.data"
 	}
+
+	var textName = ".text"
+	if len(relaTextUsers) > 0 {
+		textName = ".rela.text"
+	}
+
 	var names = []string{
 		".shstrtab",
-		".text", // or ".rela.text",
+		textName,
 		dataName,
 		".bss",
 	}
@@ -797,6 +801,23 @@ var mapTextLabelAddr = make(map[string]uintptr)
 var mapDataLabelAddr = make(map[string]uintptr)
 
 var unresolvedCodeSymbols = make(map[uintptr]string)
+
+// ModR/M
+// The ModR/M byte encodes a register or an opcode extension, and a register or a memory address. It has the following fields:
+//
+//   7   6   5   4   3   2   1   0
+// +---+---+---+---+---+---+---+---+
+// |  mod  |    reg    |     rm    |
+// +---+---+---+---+---+---+---+---+
+func composeModRM(mod byte, reg byte, rm byte) byte {
+	return mod * 32 + reg * 8 + rm
+}
+
+type relaTextUser struct {
+	addr uintptr
+	uses string
+}
+var relaTextUsers []*relaTextUser
 func translateCode(s *statement) []byte {
 	var r []byte
 
@@ -830,19 +851,44 @@ func translateCode(s *statement) []byte {
 		r = append(tmp, (bytesNum[:])...)
 	case "movq":
 		op1, op2 := s.operands[0], s.operands[1]
-		assert(op1.typ == "$number", "op1 type should be $number")
+//		assert(op1.typ == "$number", "op1 type should be $number")
 		assert(op2.typ == "register", "op2 type should be register")
-		intNum, err := strconv.ParseInt(op1.string, 0, 32)
-		if err != nil {
-			panic(err)
+		switch {
+		case op1.typ == "$number": // movq $123, %regi
+			intNum, err := strconv.ParseInt(op1.string, 0, 32)
+			if err != nil {
+				panic(err)
+			}
+			var num int32 = int32(intNum)
+			bytesNum := (*[4]byte)(unsafe.Pointer(&num))
+			var opcode uint8 = 0xc7
+			regFieldN := regField(op2.string[1:])
+			var modRM uint8 = 0b11000000+ regFieldN
+			r = []byte{REX_W, opcode, modRM}
+			r = append(r, bytesNum[:]...)
+		case op1.typ == "indirection": // movq foo(%regi), %regi
+			splitted := strings.Split(op1.string, ",")
+			if splitted[1] == "rip" {
+				// RIP relative addressing
+				var opcode uint8 = 0x8b
+
+				reg := regField(op2.string[1:])
+				modRM := composeModRM(0b000, reg, 0b101)
+				r = []byte{REX_W, opcode, modRM}
+
+				symbol := splitted[0]
+				ru := &relaTextUser{
+					addr: currentTextAddr + uintptr(len(r)),
+					uses: symbol,
+				}
+				r = append(r,  0,0,0,0)
+				relaTextUsers = append(relaTextUsers, ru)
+			} else {
+				panic("TBI")
+			}
+		default:
+			panic("TBI:"+ op1.string)
 		}
-		var num int32 = int32(intNum)
-		bytesNum := (*[4]byte)(unsafe.Pointer(&num))
-		var opcode uint8 = 0xc7
-		regFieldN := regField(op2.string[1:])
-		var modRM uint8 = 0b11000000+ regFieldN
-		r = []byte{REX_W, opcode, modRM}
-		r = append(r, bytesNum[:]...)
 	case "addl":
 		op1, op2 := s.operands[0], s.operands[1]
 		assert(op1.typ == "register", "op1 type should be register")
@@ -999,6 +1045,45 @@ func main() {
 	if needRelaData {
 		s_rela_data.header.sh_link = uint32(s_symtab.shndx)
 		s_rela_data.header.sh_info = uint32(s_data.shndx)
+	}
+
+	// build rela_text contents
+	if len(relaTextUsers) > 0 {
+		var rela_text_c []byte
+
+		for _ , ru := range relaTextUsers {
+			fmt.Fprintf(os.Stderr, "re.uses:%s\n", ru.uses)
+			addend, ok := mapTextLabelAddr[ru.uses]
+			if !ok {
+				panic("label not found")
+			}
+			if addend == 0 {
+				addend, ok = mapDataLabelAddr[ru.uses]
+				if !ok {
+					panic("label not found")
+				}
+				if ok {
+
+				}
+			}
+			//msg := fmt.Sprintf("mapDataLabelAddr=%v\n", mapDataLabelAddr)
+
+			rla := &rela{
+				r_offset: ru.addr,
+				r_info:   0x0100000002,
+				r_addend: int64(addend) - 4, // -4 ????
+			}
+			p := (*[24]byte)(unsafe.Pointer(rla))[:]
+			rela_text_c = append(rela_text_c, p...)
+		}
+		s_rela_text.contents = rela_text_c
+
+//		s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
+//		sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
+//		if needRelaData {
+//			s_rela_data.header.sh_link = uint32(s_symtab.shndx)
+//			s_rela_data.header.sh_info = uint32(s_data.shndx)
+//		}
 	}
 
 	sectionNames := makeSectionNames()
