@@ -9,49 +9,6 @@ import (
 	"unsafe"
 )
 
-// ELF format
-// see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
-// see https://man7.org/linux/man-pages/man5/elf.5.html
-// see https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h;h=4738dfa28f6549fc11654996a15659dc8007e686;hb=HEAD
-
-// copied from libc's elf/elf.h
-//#define EI_NIDENT (16)
-//
-//typedef struct
-//{
-//	unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
-//	Elf64_Half	e_type;			/* Object file type */
-//	Elf64_Half	e_machine;		/* Architecture */
-//	Elf64_Word	e_version;		/* Object file version */
-//	Elf64_Addr	e_entry;		/* Entry point virtual address */
-//	Elf64_Off	e_phoff;		/* Program header table file offset */
-//	Elf64_Off	e_shoff;		/* Section header table file offset */
-//	Elf64_Word	e_flags;		/* Processor-specific flags */
-//	Elf64_Half	e_ehsize;		/* ELF header size in bytes */
-//	Elf64_Half	e_phentsize;		/* Program header table entry size */
-//	Elf64_Half	e_phnum;		/* Program header table entry count */
-//	Elf64_Half	e_shentsize;		/* Section header table entry size */
-//	Elf64_Half	e_shnum;		/* Section header table entry count */
-//	Elf64_Half	e_shstrndx;		/* Section header string table index */
-//} Elf64_Ehdr;
-
-type Elf64_Ehdr struct {
-	e_ident [16]uint8
-	e_type uint16
-	e_machine uint16 // 20
-	e_version uint32 // 24
-	e_entry uintptr // 32
-	e_phoff uintptr // 40
-	e_shoff uintptr // 48
-	e_flags uint32 // 52
-	e_ehsize uint16
-	e_phentsize uint16
-	e_phnum uint16
-	e_shentsize uint16
-	e_shnum uint16
-	e_shstrndx uint16 // 64
-}
-
 //  An object file's symbol table holds information needed to locate
 //       and relocate a program's symbolic definitions and references.  A
 //       symbol table index is a subscript into this array.
@@ -98,83 +55,18 @@ type symbolTableEntry struct {
 	st_size uint64
 }
 
-// https://man7.org/linux/man-pages/man5/elf.5.html
-//   typedef struct { //               uint32_t   sh_name;
-//               uint32_t   sh_type;
-//               uint64_t   sh_flags;
-//               Elf64_Addr sh_addr;
-//               Elf64_Off  sh_offset;
-//               uint64_t   sh_size;
-//               uint32_t   sh_link;
-//               uint32_t   sh_info;
-//               uint64_t   sh_addralign;
-//               uint64_t   sh_entsize;
-//           } Elf64_Shdr;
-
-type sectionHeader struct {
-	// This member specifies the name of the section.
-	// Its value is an index into the section header string table section,
-	// giving the location of a null-terminated string.
-	sh_name   uint32  // 4
-	sh_type   uint32  // 8
-	sh_flags  uintptr // 16
-	sh_addr   uintptr // 24
-	sh_offset uintptr // 32
-	sh_size   uintptr // 40
-
-	// This member holds a section header table index link,
-	// whose interpretation depends on the section type.
-	sh_link   uint32  // 44
-	sh_info   uint32  // 48
-
-	// Some sections have address alignment constraints.  If a
-	// section holds a doubleword, the system must ensure
-	// doubleword alignment for the entire section.  That is, the
-	// value of sh_addr must be congruent to zero, modulo the
-	// value of sh_addralign.  Only zero and positive integral
-	// powers of two are allowed.  The value 0 or 1 means that
-	// the section has no alignment constraints.
-	sh_addralign uintptr // 56
-	sh_entsize uintptr // 64
-}
 
 type section struct {
 	sh_name    string
 	shndx      int
-	header     *sectionHeader
+	header     *ElfSectionHeader
 	numZeroPad uintptr
+	zeros      []uint8
 	contents   []uint8
 }
 
+const SectionHeaderEntrySize = unsafe.Sizeof(ElfSectionHeader{})
 
-const ELFHeaderSize = unsafe.Sizeof(Elf64_Ehdr{})
-const SectionHeaderEntrySize = unsafe.Sizeof(sectionHeader{})
-
-// # Part1: ELF Header
-var elfHeader = Elf64_Ehdr{
-	e_ident: [16]uint8{
-		0x7f, 0x45, 0x4c, 0x46, // 0x7F followed by "ELF"(45 4c 46) in ASCII;
-		0x02,                                     // EI_CLASS:2=64-bit
-		0x01,                                     // EI_DATA:1=little endian
-		0x01,                                     // EI_VERSION:1=the original and current version of ELF.
-		0x00,                                     // EI_OSABI: 0=System V
-		0x00,                                     // EI_ABIVERSION:
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // EI_PAD: always zero.
-	},
-	e_type: 1, // ET_REL
-	e_machine: 0x3e, // AMD x86-64
-	e_version: 1,
-	e_entry:0,
-	e_phoff: 0,
-	//e_shoff: 0, // calculated at runtime
-	e_flags:0,
-	e_ehsize: uint16(ELFHeaderSize),
-	e_phentsize:0,
-	e_phnum:0,
-	e_shentsize:uint16(SectionHeaderEntrySize), // 64
-	// e_shnum: 0, // calculated at runtime
-	// e_shstrndx: 0, // calculated at runtime
-}
 
 // # Part2: Contents of sections
 func makeSectionContentsOrder() []*section {
@@ -263,12 +155,6 @@ type rela struct {
 	r_addend int64
 }
 
-
-type sectionHeaderTable struct {
-	padding  uintptr
-	sections []*section
-}
-// # Part3: Section Header Table
 func prepareSHTEntries() []*section {
 	r := []*section{
 		s_null,      // NULL
@@ -300,12 +186,12 @@ var sht = &sectionHeaderTable{
 }
 
 var s_null = &section{
-	header: &sectionHeader{},
+	header: &ElfSectionHeader{},
 }
 
 var s_text = &section{
 	sh_name: ".text",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x01, // SHT_PROGBITS
 		sh_flags:     0x06, // SHF_ALLOC|SHF_EXECINSTR
 		sh_addr:      0,
@@ -319,7 +205,7 @@ var s_text = &section{
 
 var s_rela_text = &section{
 	sh_name: ".rela.text",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x04, // SHT_RELA
 		sh_flags:     0x40, // * ??
 		sh_link:      0x06,
@@ -333,7 +219,7 @@ var s_rela_text = &section{
 // ".rela.data"
 var s_rela_data = &section{
 	sh_name: ".rela.data",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x04, // SHT_RELA
 		sh_flags:     0x40, // I ??
 		sh_info:      0x02, // section idx of .data
@@ -345,7 +231,7 @@ var s_rela_data = &section{
 
 var s_data = &section{
 	sh_name: ".data",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x01, // SHT_PROGBITS
 		sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 		sh_addr:      0,
@@ -359,7 +245,7 @@ var s_data = &section{
 
 var s_bss = &section{
 	sh_name: ".bss",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x08, // SHT_NOBITS
 		sh_flags:     0x03, // SHF_WRITE|SHF_ALLOC
 		sh_addr:      0,
@@ -381,7 +267,7 @@ var s_symtab = &section{
 
 var s_shstrtab = &section{
 	sh_name: ".shstrtab",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x03, // SHT_STRTAB
 		sh_flags:     0,
 		sh_addr:      0,
@@ -402,7 +288,7 @@ var s_shstrtab = &section{
 //              section is of type SHT_STRTAB.
 var s_strtab = &section{
 	sh_name: ".strtab",
-	header: &sectionHeader{
+	header: &ElfSectionHeader{
 		sh_type:      0x03, // SHT_STRTAB
 		sh_flags:     0,
 		sh_addr:      0,
@@ -420,7 +306,7 @@ var s_strtab = &section{
 var indexOfFirstNonLocalSymbol int
 
 // ".symtab"
-var sh_symtab = &sectionHeader{
+var sh_symtab = &ElfSectionHeader{
 	sh_type:      0x02, // SHT_SYMTAB
 	sh_flags:     0,
 	sh_addr:      0,
@@ -1113,31 +999,37 @@ func main() {
 	elfHeader.e_shnum = uint16(len(sht.sections))
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
-	// Output
-	output(&elfHeader, sectionsOrderByContents, sht)
+	// prepare ELF File format
+	elfFile := prepareElfFile(elfHeader, sectionsOrderByContents, sht.padding, sht.sections)
+	elfFile.writeTo(os.Stdout)
 }
 
-func output(elfHeader *Elf64_Ehdr, sections []*section, sht *sectionHeaderTable) {
-	// Part 1: Write ELF Header
-	var buf []byte = ((*[unsafe.Sizeof(*elfHeader)]byte)(unsafe.Pointer(elfHeader)))[:]
-	os.Stdout.Write(buf)
-
-	// Part 2: Write Contents
-	for _, sect := range sections {
-		// Some sections do not have any contents
+func prepareElfFile(elfHeader *Elf64_Ehdr, sectionsForContents []*section, sht_padding uintptr, sectionHeaders []*section) *ElfFile {
+	// adjust zero padding before each section
+	var sections []*ElfSectionContents
+	for _, sect := range sectionsForContents {
+		// Some sections may not have any contents
 		if sect.contents != nil {
-			// pad zeros when required
-			if sect.numZeroPad > 0 {
-				os.Stdout.Write(make([]uint8, sect.numZeroPad))
+			sc := &ElfSectionContents{
+				body: sect.contents,
 			}
-			os.Stdout.Write(sect.contents)
+			if sect.numZeroPad > 0 {
+				// pad zeros when required
+				sc.zeros = make([]uint8, sect.numZeroPad)
+			}
+			sections = append(sections, sc)
 		}
 	}
 
-	// Part 3: Write Section Header Table
-	os.Stdout.Write(make([]uint8, sht.padding))
-	for _, sec := range sht.sections {
-		var buf []byte = ((*[unsafe.Sizeof(*sec.header)]byte)(unsafe.Pointer(sec.header)))[:]
-		os.Stdout.Write(buf)
+	var sht []*ElfSectionHeader
+	for _, s := range sectionHeaders {
+		sht = append(sht, s.header)
+	}
+
+	return &ElfFile{
+		header:          elfHeader,
+		sections :       sections,
+		zerosBeforeSHT : make([]uint8, sht_padding),
+		sht :            sht,
 	}
 }
