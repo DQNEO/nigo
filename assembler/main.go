@@ -315,99 +315,6 @@ var orderedSymbolNames []string
 var symbols []string
 var globalSymbols = make(map[string]bool)
 
-func analyze(stmts []*statement) {
-	var seenSymbols = make(map[string]bool)
-	var currentSection string
-	for _, s := range stmts {
-		if s == emptyStatement {
-			continue
-		}
-		if s.labelSymbol != "" {
-			if !seenSymbols[s.labelSymbol] {
-				orderedSymbolNames = append(orderedSymbolNames, s.labelSymbol)
-				seenSymbols[s.labelSymbol] = true
-			}
-		}
-		switch s.keySymbol {
-		case ".data":
-			currentSection = ".data"
-			continue
-		case ".text":
-			currentSection = ".text"
-			continue
-		case ".global":
-			globalSymbols[s.operands[0].string] = true
-		}
-
-		switch currentSection {
-		case ".data":
-			dataStmts = append(dataStmts, s)
-			if s.labelSymbol != "" {
-				symbols = append(symbols, s.labelSymbol)
-				symStruct.dataSymbols = append(symStruct.dataSymbols, s.labelSymbol)
-			}
-		case ".text":
-			textStmts = append(textStmts, s)
-			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
-				sym := s.operands[0].string
-				if !seenSymbols[sym] {
-					orderedSymbolNames = append(orderedSymbolNames, sym)
-					seenSymbols[sym] = true
-				}
-			}
-
-			if s.labelSymbol != "" {
-				symbols = append(symbols, s.labelSymbol)
-				if globalSymbols[s.labelSymbol] {
-					symStruct.globalfuncSymbols = append(symStruct.globalfuncSymbols, s.labelSymbol)
-				} else {
-					symStruct.localfuncSymbols = append(symStruct.localfuncSymbols, s.labelSymbol)
-				}
-			}
-		default:
-		}
-
-	}
-
-	var allSymbols = make(map[string]*symbolStruct)
-
-	for _, sym := range symStruct.dataSymbols {
-//		addr, ok := addresses[sym]
-//		if !ok {
-////			panic("address not found")
-//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".data",
-			address: 0,
-		}
-	}
-	for _, sym := range symStruct.localfuncSymbols {
-//		addr, ok := addresses[sym]
-//		if !ok {
-////			panic("address not found")
-//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".text",
-			address: 0,
-		}
-	}
-	for _, sym := range symStruct.globalfuncSymbols {
-//		addr, ok := addresses[sym]
-//		if !ok {
-////			panic("address not found")
-//		}
-		allSymbols[sym] = &symbolStruct{
-			name:    sym,
-			section: ".text",
-			address: 0,
-			nameOffset: 1,
-		}
-	}
-	allSymbolNames = allSymbols
-}
-
 const STT_SECTION = 0x03
 
 func buildSymbolTable() {
@@ -758,7 +665,96 @@ func main() {
 	stmts := parse()
 	dumpStmts(stmts)
 
-	analyze(stmts)
+	var seenSymbols = make(map[string]bool)
+	var currentSection string
+	for _, s := range stmts {
+		if s == emptyStatement {
+			continue
+		}
+		if s.labelSymbol != "" {
+			if !seenSymbols[s.labelSymbol] {
+				orderedSymbolNames = append(orderedSymbolNames, s.labelSymbol)
+				seenSymbols[s.labelSymbol] = true
+			}
+		}
+		switch s.keySymbol {
+		case ".data":
+			currentSection = ".data"
+			continue
+		case ".text":
+			currentSection = ".text"
+			continue
+		case ".global":
+			globalSymbols[s.operands[0].string] = true
+		}
+
+		switch currentSection {
+		case ".data":
+			dataStmts = append(dataStmts, s)
+			if s.labelSymbol != "" {
+				symbols = append(symbols, s.labelSymbol)
+				symStruct.dataSymbols = append(symStruct.dataSymbols, s.labelSymbol)
+			}
+		case ".text":
+			textStmts = append(textStmts, s)
+			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
+				sym := s.operands[0].string
+				if !seenSymbols[sym] {
+					orderedSymbolNames = append(orderedSymbolNames, sym)
+					seenSymbols[sym] = true
+				}
+			}
+
+			if s.labelSymbol != "" {
+				symbols = append(symbols, s.labelSymbol)
+				if globalSymbols[s.labelSymbol] {
+					symStruct.globalfuncSymbols = append(symStruct.globalfuncSymbols, s.labelSymbol)
+				} else {
+					symStruct.localfuncSymbols = append(symStruct.localfuncSymbols, s.labelSymbol)
+				}
+			}
+		default:
+		}
+
+	}
+
+	var allSymbols = make(map[string]*symbolStruct)
+
+	for _, sym := range symStruct.dataSymbols {
+		//		addr, ok := addresses[sym]
+		//		if !ok {
+		////			panic("address not found")
+		//		}
+		allSymbols[sym] = &symbolStruct{
+			name:    sym,
+			section: ".data",
+			address: 0,
+		}
+	}
+	for _, sym := range symStruct.localfuncSymbols {
+		//		addr, ok := addresses[sym]
+		//		if !ok {
+		////			panic("address not found")
+		//		}
+		allSymbols[sym] = &symbolStruct{
+			name:    sym,
+			section: ".text",
+			address: 0,
+		}
+	}
+	for _, sym := range symStruct.globalfuncSymbols {
+		//		addr, ok := addresses[sym]
+		//		if !ok {
+		////			panic("address not found")
+		//		}
+		allSymbols[sym] = &symbolStruct{
+			name:    sym,
+			section: ".text",
+			address: 0,
+			nameOffset: 1,
+		}
+	}
+	allSymbolNames = allSymbols
 
 	//dumpProgram(p)
 	code := assembleCode(stmts)
