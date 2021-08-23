@@ -12,18 +12,12 @@ import (
 
 type ElfFile struct {
 	header         *Elf64_Ehdr
-	sections       []*ElfSectionContents
+	sections       []*ElfSectionBodies
 	zerosBeforeSHT []uint8
 	sht            []*ElfSectionHeader
 }
 
-type ElfSectionContents struct {
-	zeros []uint8
-	body  []uint8
-}
-
-
-// # Part1: ELF Header
+// Part1: ELF Header
 
 //  #define EI_NIDENT (16)
 //
@@ -86,6 +80,12 @@ var elfHeader = &Elf64_Ehdr{
 	e_shentsize:uint16(SectionHeaderEntrySize), // 64
 	// e_shnum: 0, // calculated at runtime
 	// e_shstrndx: 0, // calculated at runtime
+}
+
+// Part2: Section Bodies
+type ElfSectionBodies struct {
+	zeros []uint8
+	body  []uint8
 }
 
 // # Part3: Section Header Table

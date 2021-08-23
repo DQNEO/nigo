@@ -1011,11 +1011,11 @@ func prepareElfFile(sectionBodies []*section, sectionHeaders []*section) *ElfFil
 	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
 	// adjust zero padding before each section
-	var sections []*ElfSectionContents
+	var sections []*ElfSectionBodies
 	for _, sect := range sectionBodies {
 		// Some sections may not have any contents
 		if sect.contents != nil {
-			sc := &ElfSectionContents{
+			sc := &ElfSectionBodies{
 				body: sect.contents,
 			}
 			if sect.numZeroPad > 0 {
