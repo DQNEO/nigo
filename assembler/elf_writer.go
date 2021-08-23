@@ -57,6 +57,8 @@ type Elf64_Ehdr struct {
 
 const ELFHeaderSize = unsafe.Sizeof(Elf64_Ehdr{})
 
+// Fixed data for ELF header.
+// e_shoff, e_shentsize, and e_shstrndx should be set dynamically
 var elfHeader = &Elf64_Ehdr{
 	e_ident: [16]uint8{
 		0x7f, 0x45, 0x4c, 0x46, // 0x7F followed by "ELF"(45 4c 46) in ASCII;
@@ -72,14 +74,11 @@ var elfHeader = &Elf64_Ehdr{
 	e_version: 1,
 	e_entry:0,
 	e_phoff: 0,
-	//e_shoff: 0, // calculated at runtime
 	e_flags:0,
 	e_ehsize: uint16(ELFHeaderSize),
 	e_phentsize:0,
 	e_phnum:0,
 	e_shentsize:uint16(SectionHeaderEntrySize), // 64
-	// e_shnum: 0, // calculated at runtime
-	// e_shstrndx: 0, // calculated at runtime
 }
 
 // Part2: Section Bodies
