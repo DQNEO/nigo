@@ -894,7 +894,7 @@ func main() {
 	s_data.contents = data
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
-	shtSections := prepareSHTEntries()
+	sectionHeaders := prepareSHTEntries()
 	if len(p.allSymbolNames) > 0 {
 		buildSymbolTable()
 	}
@@ -971,40 +971,48 @@ func main() {
 	sectionNames := makeSectionNames()
 	makeShStrTab(sectionNames)
 
-	sectionsOrderByContents := makeSectionContentsOrder()
-	resolveShNames(sectionsOrderByContents)
+	sectionBodies := makeSectionContentsOrder()
+	resolveShNames(sectionBodies)
 	// Calculates offset and zero padding
 	s_text.header.sh_offset = ELFHeaderSize
 	s_text.header.sh_size = uintptr(len(s_text.contents))
 
-	for i := 1; i<len(sectionsOrderByContents);i++ {
+	for i := 1; i<len(sectionBodies);i++ {
 		calcOffsetOfSection(
-			sectionsOrderByContents[i], sectionsOrderByContents[i-1])
+			sectionBodies[i], sectionBodies[i-1])
 	}
-
-	shoff := (s_shstrtab.header.sh_offset + s_shstrtab.header.sh_size)
-	var paddingBeforeSHT uintptr
-	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
-	mod := shoff % 8
-	if mod != 0 {
-		paddingBeforeSHT = 8 - mod
-	}
-	e_shoff := shoff + paddingBeforeSHT
-	elfHeader.e_shoff = e_shoff
-
-
-	elfHeader.e_shnum = uint16(len(shtSections))
-	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
 
 	// prepare ELF File format
-	elfFile := prepareElfFile(elfHeader, sectionsOrderByContents, paddingBeforeSHT, shtSections)
+	elfFile := prepareElfFile(sectionBodies, sectionHeaders)
 	elfFile.writeTo(os.Stdout)
 }
 
-func prepareElfFile(elfHeader *Elf64_Ehdr, sectionsForContents []*section, sht_padding uintptr, sectionHeaders []*section) *ElfFile {
+func calcEShoff(last *ElfSectionHeader) (uintptr,uintptr) {
+
+	endOfLastSection := last.sh_offset + last.sh_size
+
+	var paddingBeforeSHT uintptr
+	// align shoff so that e_shoff % 8 be zero. (This is not required actually. Just following gcc's practice)
+	mod := endOfLastSection % 8
+	if mod != 0 {
+		paddingBeforeSHT = 8 - mod
+	}
+	eshoff := endOfLastSection + paddingBeforeSHT
+	return paddingBeforeSHT, eshoff
+}
+
+func prepareElfFile(sectionBodies []*section, sectionHeaders []*section) *ElfFile {
+
+	lastSectionHeader := sectionHeaders[len(sectionHeaders) -1].header
+	paddingBeforeSHT, eshoff := calcEShoff(lastSectionHeader)
+
+	elfHeader.e_shoff = eshoff
+	elfHeader.e_shnum = uint16(len(sectionHeaders))
+	elfHeader.e_shstrndx = elfHeader.e_shnum - 1
+
 	// adjust zero padding before each section
 	var sections []*ElfSectionContents
-	for _, sect := range sectionsForContents {
+	for _, sect := range sectionBodies {
 		// Some sections may not have any contents
 		if sect.contents != nil {
 			sc := &ElfSectionContents{
@@ -1026,7 +1034,7 @@ func prepareElfFile(elfHeader *Elf64_Ehdr, sectionsForContents []*section, sht_p
 	return &ElfFile{
 		header:          elfHeader,
 		sections :       sections,
-		zerosBeforeSHT : make([]uint8, sht_padding),
+		zerosBeforeSHT : make([]uint8, paddingBeforeSHT),
 		sht :            sht,
 	}
 }
