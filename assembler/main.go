@@ -45,13 +45,6 @@ func buildSectionBodies() []*section {
 var symbolTable = []*symbolTableEntry{
 	&symbolTableEntry{ // NULL entry
 	},
-/*
-	&symbolTableEntry{
-		st_info:  0x03, // STT_SECTION
-		st_shndx: 0x03, // section ".data"
-	},
-
- */
 }
 
 /*
@@ -472,12 +465,14 @@ func analyze(stmts []*statement) {
 	p.allSymbolNames = allSymbols
 }
 
+const STT_SECTION = 0x03
+
 func buildSymbolTable() {
 	var index int
 	if len(relaDataUsers)> 0 {
 		symbolTable = append(symbolTable, &symbolTableEntry{
 			st_name:  0,
-			st_info:  3, // SECTION
+			st_info:  STT_SECTION,
 			st_other: 0,
 			st_shndx: uint16(s_data.shndx),
 			st_value: 0,
