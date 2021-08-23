@@ -221,14 +221,6 @@ func calcOffsetOfSection(s *section, prev *section) {
 	s.header.sh_size = uintptr(len(s.contents))
 }
 
-func makeSymbolTable() {
-	for _, entry := range symbolTable {
-		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
-		s_symtab.contents = append(s_symtab.contents, buf...)
-	}
-}
-
-
 func makeStrTab(symbols []string) []byte {
 	var nameOffset uint32
 	var data []byte = []byte{0x00}
@@ -388,6 +380,11 @@ func buildSymbolTable() {
 			st_value: sym.address,
 		}
 		symbolTable = append(symbolTable, e)
+	}
+
+	for _, entry := range symbolTable {
+		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
+		s_symtab.contents = append(s_symtab.contents, buf...)
 	}
 }
 
@@ -767,7 +764,6 @@ func main() {
 	sectionHeaders := prepareSHTEntries(len(relaTextUsers) > 0,len(relaDataUsers) > 0, len(allSymbolNames) > 0)
 	if len(allSymbolNames) > 0 {
 		buildSymbolTable()
-		makeSymbolTable()
 	}
 
 	// build rela_data contents
