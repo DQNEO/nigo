@@ -336,25 +336,16 @@ func buildSymbolTable(hasRelaData bool) {
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
 	for _, symname := range orderedAllsymbols {
-		sym := allSymbols[symname]
+		sym, ok := allSymbols[symname]
+		if !ok {
+			panic("symbol not found :" + symname)
+		}
 		index++
 		var shndx int
 		switch sym.section {
 		case ".text":
 			shndx = s_text.shndx
-			addr, ok := mapTextLabelAddr[sym.name]
-			if !ok {
-				panic("symbol not found from mapTextLabelAddr: " + sym.name)
-			}
-			//panic("sym.addreess should not be zero")
-			sym.address = uintptr(addr)
 		case ".data":
-			addr, ok := mapDataLabelAddr[sym.name]
-			if !ok {
-				panic("symbol not found from mapDataLabelAddr: " + sym.name)
-			}
-			fmt.Fprintf(os.Stderr, "@@@ data symbol %s has addr %x\n", sym.name, addr)
-			sym.address = uintptr(addr)
 			shndx = s_data.shndx
 		default:
 			panic("TBI")
@@ -397,7 +388,7 @@ var relaDataUsers []*relaDataUser
 
 func translateData(s *statement) []byte {
 	if s.labelSymbol != "" {
-		mapDataLabelAddr[s.labelSymbol] = currentDataAddr
+		allSymbols[s.labelSymbol].address = currentDataAddr
 	}
 
 	switch s.keySymbol {
@@ -458,9 +449,6 @@ func regField(reg string) uint8 {
 	return x_reg
 }
 
-var mapTextLabelAddr = make(map[string]uintptr)
-var mapDataLabelAddr = make(map[string]uintptr)
-
 var unresolvedCodeSymbols = make(map[uintptr]string)
 
 // ModR/M
@@ -483,7 +471,7 @@ func translateCode(s *statement) []byte {
 	var r []byte
 
 	if s.labelSymbol != "" {
-		mapTextLabelAddr[s.labelSymbol] = currentTextAddr
+		allSymbols[s.labelSymbol].address = currentTextAddr
 	}
 	//fmt.Printf("[translator] %s (%d ops) => ", s.keySymbol, len(s.operands))
 	switch s.keySymbol {
@@ -610,11 +598,11 @@ func assembleCode(ss []*statement) []byte {
 
 	for addr, symbol := range unresolvedCodeSymbols {
 		fmt.Fprintf(os.Stderr, "unresolvedCodeSymbols: addr %x, symbol %s\n", addr, symbol)
-		target_addr, ok := mapTextLabelAddr[symbol]
+		sym, ok := allSymbols[symbol]
 		if !ok {
 			panic("symbol not found from mapTextLabelAddr: " + symbol)
 		}
-		diff := target_addr - (addr + 4)
+		diff := sym.address - (addr + 4)
 		code[addr] = byte(diff) // @FIXME diff can be larget than a byte
 	}
 	return code
@@ -770,7 +758,7 @@ func main() {
 	// build rela_data contents
 	var rela_data_c []byte
 	for _ , ru := range relaDataUsers {
-		addend, ok := mapDataLabelAddr[ru.uses]
+		sym, ok := allSymbols[ru.uses]
 		if !ok {
 			panic("label not found")
 		}
@@ -778,7 +766,7 @@ func main() {
 		rla := &ElfRela{
 			r_offset: ru.addr,
 			r_info:   0x0100000001,
-			r_addend: int64(addend),
+			r_addend: int64(sym.address),
 		}
 		p := (*[24]byte)(unsafe.Pointer(rla))[:]
 		rela_data_c = append(rela_data_c, p...)
@@ -798,22 +786,15 @@ func main() {
 
 		for _ , ru := range relaTextUsers {
 			fmt.Fprintf(os.Stderr, "re.uses:%s\n", ru.uses)
-			addend, ok := mapTextLabelAddr[ru.uses]
-			if addend == 0 {
-				addend, ok = mapDataLabelAddr[ru.uses]
-				if !ok {
-					panic("label not found")
-				}
-				if ok {
-
-				}
+			sym, ok := allSymbols[ru.uses]
+			if !ok {
+				panic("symbol not found:" + ru.uses)
 			}
-			//msg := fmt.Sprintf("mapDataLabelAddr=%v\n", mapDataLabelAddr)
 
 			rla := &ElfRela{
 				r_offset: ru.addr,
 				r_info:   0x0100000002,
-				r_addend: int64(addend) - 4, // -4 ????
+				r_addend: int64(sym.address) - 4, // -4 ????
 			}
 			p := (*[24]byte)(unsafe.Pointer(rla))[:]
 			rela_text_c = append(rela_text_c, p...)
