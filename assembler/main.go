@@ -219,6 +219,15 @@ var rela_text = []byte{
 }
 
 */
+
+// Relocation entries (Rel & Rela)
+// Relocation is the process of connecting symbolic references with
+// symbolic definitions.  Relocatable files must have information
+// that describes how to modify their section contents, thus
+// allowing executable and shared object files to hold the right
+// information for a process's program image.  Relocation entries
+// are these data.
+//
 // Relocation structures that need an addend:
 //     typedef struct {
 //               Elf64_Addr r_offset;
@@ -226,19 +235,31 @@ var rela_text = []byte{
 //               int64_t    r_addend;
 //           } Elf64_Rela;
 //
-var rela_data = []byte{
-	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
-	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
-	0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
-
-	0x28 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
-	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
-	0x08 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
-
-	0x30 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_offset
-	0x01 ,0x00 ,0x00 ,0x00 ,0x01 ,0x00 ,0x00 ,0x00, // r_info = R_X86_64_64
-	0x28 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00, // r_addend
+//       r_offset
+//              This member gives the location at which to apply the
+//              relocation action.  For a relocatable file, the value is
+//              the byte offset from the beginning of the section to the
+//              storage unit affected by the relocation.  For an
+//              executable file or shared object, the value is the virtual
+//              address of the storage unit affected by the relocation.
+//
+//       r_info This member gives both the symbol table index with respect
+//              to which the relocation must be made and the type of
+//              relocation to apply.  Relocation types are processor-
+//              specific.  When the text refers to a relocation entry's
+//              relocation type or symbol table index, it means the result
+//              of applying ELF[32|64]_R_TYPE or ELF[32|64]_R_SYM,
+//              respectively, to the entry's r_info member.
+//
+//       r_addend
+//              This member specifies a constant addend used to compute
+//              the value to be stored into the relocatable field.
+type rela struct {
+	r_offset uintptr
+	r_info uint64
+	r_addend int64
 }
+
 
 type sectionHeaderTable struct {
 	padding  uintptr
@@ -306,7 +327,7 @@ var s_rela_data = &section{
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
 	},
-	contents: rela_data,
+	contents: nil,
 }
 
 var s_data = &section{
@@ -692,6 +713,13 @@ func buildSymbolTable() {
 }
 
 var needRelaData bool
+type relaDataUser struct {
+	addr uintptr
+	uses string
+}
+
+var relaDataUsers []*relaDataUser
+
 func translateData(s *statement) []byte {
 	if s.labelSymbol != "" {
 		mapDataLabelAddr[s.labelSymbol] = currentDataAddr
@@ -717,6 +745,11 @@ func translateData(s *statement) []byte {
 			buf := (*[8]byte)(unsafe.Pointer(&i))
 			return buf[:]
 		case "symbol":
+			ru := &relaDataUser{
+				addr: currentDataAddr,
+				uses: op.string,
+			}
+			relaDataUsers = append(relaDataUsers, ru)
 			needRelaData = true
 			return make([]byte, 8)
 		default:
@@ -942,6 +975,24 @@ func main() {
 	if len(symbols) > 0 {
 		makeSymbolTable()
 	}
+
+	// build rela_data contents
+	var rela_data_c []byte
+	for _ , ru := range relaDataUsers {
+		addend, ok := mapDataLabelAddr[ru.uses]
+		if !ok {
+			panic("label not found")
+		}
+
+		rla := &rela{
+			r_offset: ru.addr,
+			r_info:   0x0100000001,
+			r_addend: int64(addend),
+		}
+		p := (*[24]byte)(unsafe.Pointer(rla))[:]
+		rela_data_c = append(rela_data_c, p...)
+	}
+	s_rela_data.contents = rela_data_c
 
 	s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
 	sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)

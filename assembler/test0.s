@@ -8,7 +8,7 @@ var3:
   .quad 0
   .quad 0
 var4:
-  .quad var2
+  .quad var5
 var5:
   .quad var4
 
