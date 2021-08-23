@@ -973,19 +973,22 @@ func main() {
 
 	sectionBodies := makeSectionContentsOrder()
 	resolveShNames(sectionBodies)
-	// Calculates offset and zero padding
-	s_text.header.sh_offset = ELFHeaderSize
-	s_text.header.sh_size = uintptr(len(s_text.contents))
-
-	for i := 1; i<len(sectionBodies);i++ {
-		calcOffsetOfSection(
-			sectionBodies[i], sectionBodies[i-1])
-	}
 
 	// prepare ELF File format
 	elfFile := prepareElfFile(sectionBodies, sectionHeaders)
 	elfFile.writeTo(os.Stdout)
 }
+
+func determineSectionOffsets(sectionBodies []*section) {
+	firtSectionInBodies := sectionBodies[0]
+	firtSectionInBodies.header.sh_offset = ELFHeaderSize
+	firtSectionInBodies.header.sh_size = uintptr(len(firtSectionInBodies.contents))
+	for i := 1; i<len(sectionBodies);i++ {
+		calcOffsetOfSection(
+			sectionBodies[i], sectionBodies[i-1])
+	}
+}
+
 
 func calcEShoff(last *ElfSectionHeader) (uintptr,uintptr) {
 
@@ -1002,6 +1005,9 @@ func calcEShoff(last *ElfSectionHeader) (uintptr,uintptr) {
 }
 
 func prepareElfFile(sectionBodies []*section, sectionHeaders []*section) *ElfFile {
+
+	// Calculates offset and zero padding
+	determineSectionOffsets(sectionBodies)
 
 	lastSectionHeader := sectionHeaders[len(sectionHeaders) -1].header
 	paddingBeforeSHT, eshoff := calcEShoff(lastSectionHeader)

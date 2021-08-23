@@ -129,6 +129,7 @@ type ElfSectionHeader struct {
 	sh_entsize uintptr // 64
 }
 
+
 func (elfFile *ElfFile) writeTo(w io.Writer) {
 	// Part 1: Write ELF Header
 	h := elfFile.header
