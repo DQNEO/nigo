@@ -87,6 +87,47 @@ type ElfSectionBodies struct {
 	body  []uint8
 }
 
+
+// Relocation entries (Rel & Rela)
+// Relocation is the process of connecting symbolic references with
+// symbolic definitions.  Relocatable files must have information
+// that describes how to modify their section contents, thus
+// allowing executable and shared object files to hold the right
+// information for a process's program image.  Relocation entries
+// are these data.
+//
+// Relocation structures that need an addend:
+//     typedef struct {
+//               Elf64_Addr r_offset;
+//               uint64_t   r_info;
+//               int64_t    r_addend;
+//           } Elf64_Rela;
+//
+//       r_offset
+//              This member gives the location at which to apply the
+//              relocation action.  For a relocatable file, the value is
+//              the byte offset from the beginning of the section to the
+//              storage unit affected by the relocation.  For an
+//              executable file or shared object, the value is the virtual
+//              address of the storage unit affected by the relocation.
+//
+//       r_info This member gives both the symbol table index with respect
+//              to which the relocation must be made and the type of
+//              relocation to apply.  Relocation types are processor-
+//              specific.  When the text refers to a relocation entry's
+//              relocation type or symbol table index, it means the result
+//              of applying ELF[32|64]_R_TYPE or ELF[32|64]_R_SYM,
+//              respectively, to the entry's r_info member.
+//
+//       r_addend
+//              This member specifies a constant addend used to compute
+//              the value to be stored into the relocatable field.
+type ElfRela struct {
+	r_offset uintptr
+	r_info uint64
+	r_addend int64
+}
+
 //  An object file's symbol table holds information needed to locate
 //       and relocate a program's symbolic definitions and references.  A
 //       symbol table index is a subscript into this array.
@@ -100,7 +141,7 @@ type ElfSectionBodies struct {
 //               uint64_t      st_size;
 //           } Elf64_Sym;
 
-type symbolTableEntry struct {
+type ElfSym struct {
 	// This member holds an index into the object file's symbol
 	//              string table, which holds character representations of the
 	//              symbol names.  If the value is nonzero, it represents a
