@@ -1,5 +1,5 @@
 .PHONEY: test
-test: my.o.xxd gnu.o.xxd gnu.readelf my.readelf diff
+test: gnu.o.xxd gnu.readelf my.o.xxd my.readelf diff
 
 my.o: test0.s main.go parser.go
 	go run main.go parser.go < $< > $@
