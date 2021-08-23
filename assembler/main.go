@@ -25,7 +25,7 @@ func buildSectionBodies() []*section {
 		s_bss,  // .bss (no contents)
 	}
 
-	if len(p.allSymbolNames) > 0 {
+	if len(allSymbolNames) > 0 {
 		sections = append(sections, s_symtab, s_strtab)
 	}
 
@@ -45,23 +45,26 @@ func buildSectionBodies() []*section {
 var symbolTable = []*ElfSym{
 	&ElfSym{}, // NULL entry
 }
-func prepareSHTEntries() []*section {
+
+func prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols bool) []*section {
+
 	r := []*section{
 		s_null,      // NULL
 		s_text,      // .text
 	}
 
-	if len(relaTextUsers) > 0 {
+	if hasRelaText {
 		r = append(r, s_rela_text)
 	}
 
 	r = append(r, s_data)
 
-	if len(relaDataUsers) > 0 {
+	if hasRelaData {
 		r = append(r, s_rela_data)
 	}
 	r = append(r, s_bss)
-	if len(p.allSymbolNames) > 0 {
+
+	if hasSymbols {
 		r = append(r, s_symtab, s_strtab)
 	}
 	r = append(r, s_shstrtab)
@@ -218,9 +221,6 @@ func calcOffsetOfSection(s *section, prev *section) {
 	s.header.sh_size = uintptr(len(s.contents))
 }
 
-func makeDataSection() {
-}
-
 func makeSymbolTable() {
 	for _, entry := range symbolTable {
 		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
@@ -246,7 +246,7 @@ func makeStrTab(symbols []string) []byte {
 func makeSectionNames() []string {
 	var sectionNames []string
 
-	if len(p.allSymbolNames) > 0 {
+	if len(allSymbolNames) > 0 {
 		sectionNames = append(sectionNames, ".symtab",".strtab")
 	}
 
@@ -307,17 +307,12 @@ type symbolStruct struct {
 	address uintptr
 }
 
-type programStruct struct {
-	textStmts []*statement
-	dataStmts []*statement
-	symStruct symbolTableStruct
-	allSymbolNames map[string]*symbolStruct
-	orderedSymbolNames []string
-}
-
-var p = &programStruct{}
+var textStmts []*statement
+var dataStmts []*statement
+var symStruct symbolTableStruct
+var allSymbolNames map[string]*symbolStruct
+var orderedSymbolNames []string
 var symbols []string
-
 var globalSymbols = make(map[string]bool)
 
 func analyze(stmts []*statement) {
@@ -329,7 +324,7 @@ func analyze(stmts []*statement) {
 		}
 		if s.labelSymbol != "" {
 			if !seenSymbols[s.labelSymbol] {
-				p.orderedSymbolNames = append(p.orderedSymbolNames, s.labelSymbol)
+				orderedSymbolNames = append(orderedSymbolNames, s.labelSymbol)
 				seenSymbols[s.labelSymbol] = true
 			}
 		}
@@ -346,17 +341,17 @@ func analyze(stmts []*statement) {
 
 		switch currentSection {
 		case ".data":
-			p.dataStmts = append(p.dataStmts, s)
+			dataStmts = append(dataStmts, s)
 			if s.labelSymbol != "" {
 				symbols = append(symbols, s.labelSymbol)
-				p.symStruct.dataSymbols = append(p.symStruct.dataSymbols, s.labelSymbol)
+				symStruct.dataSymbols = append(symStruct.dataSymbols, s.labelSymbol)
 			}
 		case ".text":
-			p.textStmts = append(p.textStmts, s)
+			textStmts = append(textStmts, s)
 			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
 				sym := s.operands[0].string
 				if !seenSymbols[sym] {
-					p.orderedSymbolNames = append(p.orderedSymbolNames, sym)
+					orderedSymbolNames = append(orderedSymbolNames, sym)
 					seenSymbols[sym] = true
 				}
 			}
@@ -364,9 +359,9 @@ func analyze(stmts []*statement) {
 			if s.labelSymbol != "" {
 				symbols = append(symbols, s.labelSymbol)
 				if globalSymbols[s.labelSymbol] {
-					p.symStruct.globalfuncSymbols = append(p.symStruct.globalfuncSymbols, s.labelSymbol)
+					symStruct.globalfuncSymbols = append(symStruct.globalfuncSymbols, s.labelSymbol)
 				} else {
-					p.symStruct.localfuncSymbols = append(p.symStruct.localfuncSymbols, s.labelSymbol)
+					symStruct.localfuncSymbols = append(symStruct.localfuncSymbols, s.labelSymbol)
 				}
 			}
 		default:
@@ -376,7 +371,7 @@ func analyze(stmts []*statement) {
 
 	var allSymbols = make(map[string]*symbolStruct)
 
-	for _, sym := range p.symStruct.dataSymbols {
+	for _, sym := range symStruct.dataSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
@@ -387,7 +382,7 @@ func analyze(stmts []*statement) {
 			address: 0,
 		}
 	}
-	for _, sym := range p.symStruct.localfuncSymbols {
+	for _, sym := range symStruct.localfuncSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
@@ -398,7 +393,7 @@ func analyze(stmts []*statement) {
 			address: 0,
 		}
 	}
-	for _, sym := range p.symStruct.globalfuncSymbols {
+	for _, sym := range symStruct.globalfuncSymbols {
 //		addr, ok := addresses[sym]
 //		if !ok {
 ////			panic("address not found")
@@ -410,7 +405,7 @@ func analyze(stmts []*statement) {
 			nameOffset: 1,
 		}
 	}
-	p.allSymbolNames = allSymbols
+	allSymbolNames = allSymbols
 }
 
 const STT_SECTION = 0x03
@@ -431,7 +426,7 @@ func buildSymbolTable() {
 	var orderedNonGlobalSymbols []string
 	var ordererGlobalSymbols []string
 	fmt.Fprintf(os.Stderr, "globalSymbols=%v\n", globalSymbols)
-	for _, sym := range p.orderedSymbolNames {
+	for _, sym := range orderedSymbolNames {
 		if globalSymbols[sym] {
 			ordererGlobalSymbols = append(ordererGlobalSymbols, sym)
 		} else {
@@ -443,7 +438,7 @@ func buildSymbolTable() {
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
 	for _, symname := range orderedAllsymbols {
-		sym := p.allSymbolNames[symname]
+		sym := allSymbolNames[symname]
 		index++
 		var shndx int
 		switch sym.section {
@@ -735,12 +730,12 @@ func assembleData(ss []*statement) []byte {
 }
 
 
-func dumpProgram(p *programStruct) {
+func dumpProgram() {
 	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
-	for _, stmt := range p.dataStmts {
+	for _, stmt := range dataStmts {
 		dumpStmt(0, stmt)
 	}
-	for _, stmt := range p.textStmts {
+	for _, stmt := range textStmts {
 		dumpStmt(0, stmt)
 	}
 }
@@ -762,6 +757,7 @@ func main() {
 	}
 	stmts := parse()
 	dumpStmts(stmts)
+
 	analyze(stmts)
 
 	//dumpProgram(p)
@@ -770,16 +766,15 @@ func main() {
 	//return
 	s_text.contents = code
 
-	data := assembleData(p.dataStmts)
+	data := assembleData(dataStmts)
 	//fmt.Fprintf(os.Stderr, "mapDataLabelAddr=%v\n", mapDataLabelAddr)
 	s_data.contents = data
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
-	sectionHeaders := prepareSHTEntries()
-	if len(p.allSymbolNames) > 0 {
+	sectionHeaders := prepareSHTEntries(len(relaTextUsers) > 0,len(relaDataUsers) > 0, len(allSymbolNames) > 0)
+	if len(allSymbolNames) > 0 {
 		buildSymbolTable()
 	}
-
 
 	if len(symbols) > 0 {
 		makeSymbolTable()
