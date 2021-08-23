@@ -647,16 +647,7 @@ func translateData(s *statement) []byte {
 	return nil
 }
 
-var movqIdx int
 const REX_W byte = 0x48
-
-var movq0 = []byte{REX_W, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00,}
-var movq1 = []byte{REX_W, 0x8b, 0x00,}
-var movq2 = []byte{REX_W, 0xc7, 0xc7,    0x20, 0x00, 0x00, 0x00,}
-var movq3 = []byte{REX_W, 0xc7, 0xc0,    0x3c, 0x00, 0x00, 0x00,}
-var insts = [][]byte{
-	movq0, movq1, movq2, movq3,
-}
 
 // The registers are encoded using the 4-bit values in the X.Reg column of the following table.
 // X.Reg is in binary.
