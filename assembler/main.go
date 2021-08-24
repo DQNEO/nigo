@@ -532,7 +532,7 @@ func translateCode(s *statement) []byte {
 			} else if regi.name == "rsp" {
 				var opcode uint8 = 0x8d
 				var mod uint8 = 0b01 // indirection with 8bit displacement
-				var rm = regBits("sp")
+				rm := regBits("sp")
 				reg := op2regi.toBits()
 				modRM := composeModRM(mod, reg, rm)
 				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
@@ -594,33 +594,42 @@ func translateCode(s *statement) []byte {
 				if op2dtype.isRipRelative() {
 					switch expr := op2dtype.expr.(type) {
 					case *binaryExpr:
-						if true {
+						// REX.W 89 /r (MOV r/m64 r64, MR)
+						// "movq %rbx, runtime.__argv__+8(%rip)"
+						mod := ModIndirectionWithNoDisplacement
+						reg := op1.toBits() // src
+						rm := RM_SPECIAL_101 // RIP
+						modRM := composeModRM(mod, reg, rm)
+						r = []byte{REX_W,opcode,modRM}
 
-							// REX.W 89 /r (MOV r/m64 r64, MR)
-							// "movq %rbx, runtime.__argv__+8(%rip)"
-							mod := ModIndirectionWithNoDisplacement
-							reg := op1.toBits() // src
-							rm := RM_SPECIAL_101
-							modRM := composeModRM(mod, reg, rm)
-							r = []byte{REX_W,opcode,modRM}
+						symbol := expr.left.(*symbolExpr).name
 
-							symbol := expr.left.(*symbolExpr).name
-
-							// @TODO shouud use expr.right.(*numberExpr).val as an offset
-							ru := &relaTextUser{
-								addr: currentTextAddr + uintptr(len(r)),
-								uses: symbol,
-							}
-
-							r = append(r,  0,0,0,0)
-
-							relaTextUsers = append(relaTextUsers, ru)
+						// @TODO shouud use expr.right.(*numberExpr).val as an offset
+						ru := &relaTextUser{
+							addr: currentTextAddr + uintptr(len(r)),
+							uses: symbol,
 						}
+
+						r = append(r,  0,0,0,0)
+
+						relaTextUsers = append(relaTextUsers, ru)
 					default:
 						panic("TBI:" + string(s.raw))
 					}
 				} else {
-					panic("TBI:" + string(s.raw))
+					// movq %rax, 32(%rsp)
+					mod := ModIndirectionWithDisplacement8
+					reg := op1.toBits() // src
+					rm := regBits("sp")
+					modRM := composeModRM(mod, reg, rm)
+
+					sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
+					num := op2dtype.expr.(*numberExpr).val
+					displacement, err := strconv.ParseInt(num, 0, 8)
+					if err != nil {
+						panic(err)
+					}
+					r = []byte{REX_W, opcode, modRM, sib, uint8(displacement)}
 				}
 			default:
 				panic("unexpected op2.typ:")
@@ -632,7 +641,7 @@ func translateCode(s *statement) []byte {
 				// RIP relative addressing
 				var opcode uint8 = 0x8b
 				reg := op2regi.toBits()
-				mod := ModRegiToRegi
+				mod := ModIndirectionWithNoDisplacement
 				modRM := composeModRM(mod, reg, 0b101)
 				r = []byte{REX_W, opcode, modRM}
 
@@ -881,7 +890,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "re.uses:%s\n", ru.uses)
 			sym, ok := allSymbols[ru.uses]
 			if !ok {
-				panic("symbol not found:" + ru.uses)
+				fmt.Fprintf(os.Stderr, "symbol not found:" + ru.uses)
+				continue
 			}
 
 			rla := &ElfRela{

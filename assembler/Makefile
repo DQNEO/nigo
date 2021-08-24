@@ -1,12 +1,15 @@
+test_input = test0.s
+#test_input = ../src/runtime/runtime.s
+
 .PHONEY: run
 run: my.o
 
 .PHONEY: test
 test: gnu.o.xxd gnu.readelf my.o.xxd my.readelf diff
-my.o:  test0.s main.go parser.go elf_writer.go
+my.o:  $(test_input) main.go parser.go elf_writer.go
 	go run main.go parser.go elf_writer.go < $< > $@
 
-gnu.o: test0.s
+gnu.o: $(test_input)
 	as -o $@ $<
 
 my.o.xxd: my.o
@@ -23,8 +26,8 @@ my.readelf: my.o
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd my.readelf gnu.readelf
-	diff --color -u my.readelf gnu.readelf
-	#diff --color -u my.o.xxd gnu.o.xxd
+	diff --color -u my.o.xxd gnu.o.xxd
+	#diff --color -u my.readelf gnu.readelf
 	@echo ok
 
 test.bin: my.o
