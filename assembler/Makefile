@@ -1,3 +1,4 @@
+GOSOURCES = $(wildcard *.go)
 SOURCES = $(wildcard *.s)
 GNU_OBJS = $(SOURCES:%.s=%.gnu.o)
 MY_OBJS = $(SOURCES:%.s=%.my.o)
@@ -19,8 +20,8 @@ objs: $(GNU_OBJS) $(MY_OBJS)
 %.my.o: %.s gas
 	./gas < $< > $@
 
-gas:
-	go build -o gas *.go
+gas: $(GOSOURCES)
+	go build -o gas $(GOSOURCES)
 
 clean:
 	rm -f gas *.o
