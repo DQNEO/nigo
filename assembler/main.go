@@ -634,7 +634,7 @@ func translateCode(s *statement) []byte {
 			default:
 				panic("unexpected op2.typ:")
 			}
-		case *indirection: // movq foo(%regi), %regi
+		case *indirection: // "movq foo(%regi), X", "movq (%regi), X"
 			op1regi := op1.regi
 			op2regi := op2.ifc.(*register)
 			if op1regi.name == "rip" {
@@ -662,6 +662,13 @@ func translateCode(s *statement) []byte {
 				modRM := composeModRM(mod, reg, rm)
 				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
 				r = []byte{REX_W, opcode, modRM, sib}
+			} else {
+				var opcode uint8 = 0x8b
+				reg := op2regi.toBits()
+				mod := ModIndirectionWithNoDisplacement
+				rm := op1regi.toBits()
+				modRM := composeModRM(mod, reg, rm)
+				r = []byte{REX_W, opcode, modRM}
 			}
 		default:
 			panic(fmt.Sprintf("TBI:%v", op1))
@@ -730,8 +737,9 @@ func assembleCode(ss []*statement) []byte {
 		if s.labelSymbol == "" && s.keySymbol == "" {
 			continue
 		}
+		codeAddr := currentTextAddr
 		buf := translateCode(s)
-		fmt.Fprintf(os.Stderr, "[encoder] %s\t=>\t%s\n", s.raw,  dumpCode(buf))
+		fmt.Fprintf(os.Stderr, "[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw,  dumpCode(buf))
 		code = append(code, buf...)
 	}
 
@@ -741,11 +749,13 @@ func assembleCode(ss []*statement) []byte {
 		if !ok {
 			fmt.Fprintf(os.Stderr, "  symbol not found: %s\n" , replaceInfo.symbolUsed)
 		} else {
-			fmt.Fprintf(os.Stderr, "  found symbol:%v\n", sym)
+			fmt.Fprintf(os.Stderr, "  found symbol:%v\n", sym.name)
 			diff := sym.address - replaceInfo.nextInstrAddr
 			if diff > 255 {
 				panic("diff is too large")
 			}
+			fmt.Fprintf(os.Stderr, "  patching symol addr into code : %s=%02x => %02x (%02x - %02x)\n",
+				sym.name, codeAddr, diff, sym.address , replaceInfo.nextInstrAddr)
 			code[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
 		}
 	}

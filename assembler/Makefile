@@ -1,4 +1,4 @@
-test_input = test0.s
+test_input = test1.s
 #test_input = ../src/runtime/runtime.s
 
 .PHONEY: run
