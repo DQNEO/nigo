@@ -494,10 +494,19 @@ const ModIndirectionWithDisplacement32 uint8 = 0b10
 
 const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 
-func translateCode(s *statement) []byte {
+type Instruction struct {
+	startAddr uintptr
+	raw       *statement
+	code      []byte
+}
+
+func encode(s *statement) *Instruction {
 	//fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
 	var r []byte
-
+	var instr = &Instruction{
+		startAddr:   currentTextAddr,
+		raw:         s,
+	}
 	if s.labelSymbol != "" {
 		allSymbols[s.labelSymbol].address = currentTextAddr
 	}
@@ -687,7 +696,6 @@ func translateCode(s *statement) []byte {
 		r = []byte{0x0f, 0x05}
 	case ".text":
 		//fmt.Printf(" skip\n")
-		return nil
 	case "imulq":
 	case "subq":
 	case "pushq":
@@ -695,11 +703,10 @@ func translateCode(s *statement) []byte {
 	default:
 		if strings.HasPrefix(s.keySymbol , ".") {
 			//fmt.Printf(" (directive)\n")
-			return nil
 		} else {
 			if s.labelSymbol != "" && s.keySymbol == "" {
 				//fmt.Printf(" (label)\n")
-				return nil
+				return instr
 			} else {
 				panic("Unexpected key symbols:" + s.keySymbol)
 			}
@@ -708,8 +715,8 @@ func translateCode(s *statement) []byte {
 	}
 
 	//fmt.Printf("=>  %#x\n", r)
-	currentTextAddr += uintptr(len(r))
-	return r
+	instr.code = r
+	return instr
 }
 
 /*
@@ -738,7 +745,9 @@ func assembleCode(ss []*statement) []byte {
 			continue
 		}
 		codeAddr := currentTextAddr
-		buf := translateCode(s)
+		instr := encode(s)
+		buf := instr.code
+		currentTextAddr += uintptr(len(buf))
 		fmt.Fprintf(os.Stderr, "[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw,  dumpCode(buf))
 		code = append(code, buf...)
 	}
