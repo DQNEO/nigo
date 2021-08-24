@@ -1,42 +1,27 @@
-test_input = test.s
-#test_input = ../src/runtime/runtime.s
-
-.PHONY: run
-run: my.o
-
-.PHONY: test
-test: gnu.o.xxd gnu.readelf my.o.xxd my.readelf diff
-
-my.o:  $(test_input) main.go parser.go elf_writer.go
-	go run main.go parser.go elf_writer.go < $< > $@
-
-gnu.o: $(test_input)
-	as -o $@ $<
-
-my.o.xxd: my.o
-	xxd -g 1 -c 8 $< > $@
-
-gnu.o.xxd: gnu.o
-	xxd -g 1 -c 8 $< > $@
-
-gnu.readelf: gnu.o
-	./readelf.sh $< > $@
-
-my.readelf: my.o
-	./readelf.sh $< > $@
+SOURCES = $(wildcard *.s)
+GNU_OBJS = $(SOURCES:%.s=%.gnu.o)
+MY_OBJS = $(SOURCES:%.s=%.my.o)
 
 .PHONY: diff
-diff: gnu.o.xxd my.o.xxd my.readelf gnu.readelf
-	#diff --color -u my.o.xxd gnu.o.xxd
-	diff --color -u my.readelf gnu.readelf
-	@echo ok
+diff: objs
+	diff test0.gnu.o test0.my.o
+	diff test1.gnu.o test1.my.o
+	diff test2.gnu.o test2.my.o
+	diff test3.gnu.o test3.my.o
+	diff test4.gnu.o test4.my.o
 
-test.bin: my.o
-	gcc -o $@ $<
+.PHONY: objs
+objs: $(GNU_OBJS) $(MY_OBJS)
 
-test-binary: test.bin
-	./test.bin; test $$? -eq 42 && echo ok
+%.gnu.o: %.s
+	as -o $@ $<
 
-.PHONY: clean
+%.my.o: %.s gas
+	./gas < $< > $@
+
+gas:
+	go build -o gas *.go
+
 clean:
-	rm -f *.o *.bin *.readelf *.xxd
+	rm -f gas *.o
+

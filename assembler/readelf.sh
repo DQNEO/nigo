@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
 file=$1
-#objdump --disassemble $file
-#exit
 
 readelf -W --hex-dump=.text $file
 readelf -W --hex-dump=.data $file
