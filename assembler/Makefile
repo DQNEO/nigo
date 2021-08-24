@@ -1,11 +1,12 @@
 test_input = test.s
 #test_input = ../src/runtime/runtime.s
 
-.PHONEY: run
+.PHONY: run
 run: my.o
 
-.PHONEY: test
+.PHONY: test
 test: gnu.o.xxd gnu.readelf my.o.xxd my.readelf diff
+
 my.o:  $(test_input) main.go parser.go elf_writer.go
 	go run main.go parser.go elf_writer.go < $< > $@
 
