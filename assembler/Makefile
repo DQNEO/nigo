@@ -1,4 +1,4 @@
-test_input = test1.s
+test_input = test.s
 #test_input = ../src/runtime/runtime.s
 
 .PHONEY: run
@@ -26,8 +26,8 @@ my.readelf: my.o
 
 .PHONY: diff
 diff: gnu.o.xxd my.o.xxd my.readelf gnu.readelf
-	diff --color -u my.o.xxd gnu.o.xxd
-	#diff --color -u my.readelf gnu.readelf
+	#diff --color -u my.o.xxd gnu.o.xxd
+	diff --color -u my.readelf gnu.readelf
 	@echo ok
 
 test.bin: my.o

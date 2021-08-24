@@ -11,6 +11,10 @@ var4:
   .quad 0
 var5:
   .quad var2
+myGlobalInt:
+  .quad 0x0a
+pGlobalInt:
+  .quad myGlobalInt
 
 .text
 .global _start
@@ -31,3 +35,20 @@ myfunc2:
   ret
 myfunc3:
   ret
+start2:
+  nop
+  callq myfunc4
+  callq myfunc5
+
+  movq pGlobalInt(%rip), %rax
+  movq (%rax), %rax
+  movq $0x20, %rdi
+  addq %rax, %rdi
+  movq $0x3c, %rax
+  syscall
+
+  retq
+myfunc4:
+  retq
+myfunc5:
+  retq
