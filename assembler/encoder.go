@@ -334,6 +334,14 @@ func encode(s *statement) *Instruction {
 		default:
 			panic("[encoder] TBI:" + string(s.raw))
 		}
+	case "popq":
+		switch op := s.operands[0].ifc.(type) {
+		case *register:
+			// 58 +rd. POP r64.
+			r = []byte{0x58 + op.toBits()}
+		default:
+			panic("[encoder] TBI:" + string(s.raw))
+		}
 	case "ret", "retq":
 		r = []byte{0xc3}
 	case "syscall":
