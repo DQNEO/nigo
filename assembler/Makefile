@@ -10,6 +10,7 @@ diff: objs
 	diff test2.gnu.o test2.my.o
 	diff test3.gnu.o test3.my.o
 	diff test4.gnu.o test4.my.o
+	@echo ok
 
 .PHONY: objs
 objs: $(GNU_OBJS) $(MY_OBJS)
