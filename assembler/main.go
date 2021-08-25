@@ -495,6 +495,7 @@ func main() {
 
 	var seenSymbols = make(map[string]bool)
 	var currentSection string
+	currentSection = ".text"
 	for _, s := range stmts {
 		if s == emptyStatement {
 			continue
