@@ -124,21 +124,43 @@ func readStringLiteral() string {
 	}
 }
 
-func parseArith() string {
-	n := readNumber()
+func evalNumExpr(expr expr) int {
+	switch e := expr.(type) {
+	case *numberLit:
+		num := strconv.Atoi(e.val)
+		return num
+	case *binaryExpr:
+		switch e.op {
+		case "*":
+			return evalNumExpr(e.left) * evalNumExpr(e.right)
+		}
+	}
+	panic(fmt.Sprintf("unkonwn type %T", expr))
+}
+// binary or unary or primary expr
+func parseArithExpr() expr {
+	n := readNumberLitral()
 	skipWhitespaces()
 	ch := source[idx]
 	switch ch {
 	case '+', '-', '*', '/':
 		idx++
-		n2 := readNumber()
-		return n + string(ch) + n2
+		n2 := readNumberLitral()
+		return &binaryExpr{
+			op:    string(ch),
+			left:  n,
+			right: n2,
+		}
 	default:
+		// number literal
 		return n
 	}
 }
 
-func readNumber() string {
+type numberLit struct {
+	val string
+}
+func readNumberLitral() *numberLit {
 	first := source[idx]
 	idx++
 	var buf []byte = []byte{first}
@@ -148,7 +170,7 @@ func readNumber() string {
 			buf = append(buf, ch)
 			idx++
 		} else {
-			return string(buf)
+			return &numberLit{val: string(buf)}
 		}
 	}
 }
@@ -179,7 +201,7 @@ func parseOperand() *operand {
 			}
 		case '+': // e.g. foo+8(%rip)
 			expect('+')
-			num := readNumber()
+			e := parseArithExpr()
 			switch source[idx] {
 			case '(':
 				regi := readParenthRegister()
@@ -188,7 +210,7 @@ func parseOperand() *operand {
 						expr: &binaryExpr{
 							op:    "+",
 							left:  &symbolExpr{name: symbol},
-							right: &numberExpr{val: num},
+							right: e,
 						},
 						regi: regi,
 					},
@@ -210,19 +232,19 @@ func parseOperand() *operand {
 			ifc: s,
 		}
 	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"
-		n := parseArith()
+		e := parseArithExpr()
 		if source[idx] == '(' {
 			// indirection e.g. 24(%rbp)
 			regi := readParenthRegister()
 			return &operand{
 				ifc: &indirection{
-					expr: &numberExpr{val: n},
+					expr: e,
 					regi: regi,
 				},
 			}
 		} else {
 			// just a number
-			numExpr := &numberExpr{val: n}
+			numExpr := e
 			return &operand{
 				ifc: numExpr,
 			}
@@ -238,9 +260,11 @@ func parseOperand() *operand {
 		// AT&T immediate operands are preceded by ‘$’;
 		expect('$')
 		// "$123" "$-7", "$ 2 * 3"
-		e := parseArith()
+		e := parseArithExpr()
 		return &operand{
-			ifc: &immediate{expr: e},
+			ifc: &immediate{
+				expr:  e,
+			},
 		}
 	case ch == '%':
 		regName := readRegi()
@@ -320,12 +344,7 @@ func (op *indirection) isRipRelative() bool {
 
 // $numberExpr
 type immediate struct {
-	expr string // "7", "-7", "2+3"
-}
-
-// unary number expression
-type numberExpr struct {
-	val string // "7", "-7", "2+3"
+	expr expr // "7", "-7", "2+3"
 }
 
 // "foo" in ".quad foo" or "foo(%rip)"

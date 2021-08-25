@@ -150,7 +150,7 @@ func encode(s *statement) *Instruction {
 				reg := op2regi.toBits()
 				modRM := composeModRM(mod, reg, rm)
 				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
-				num := op1dtype.expr.(*numberExpr).val
+				num := op1dtype.expr.(*numberLit).val
 				displacement, err := strconv.ParseInt(num, 0, 8)
 				if err != nil {
 					panic(err)
@@ -184,7 +184,7 @@ func encode(s *statement) *Instruction {
 		//assert(op2.typ == "register", "op2 type should be register")
 		switch op1 := s.operands[0].ifc.(type) {
 		case *immediate: // movq $123, %regi
-			intNum, err := strconv.ParseInt(op1.expr, 0, 32)
+			intNum, err := strconv.ParseInt(op1.expr.(*numberLit).val, 0, 32)
 			if err != nil {
 				panic(err)
 			}
@@ -238,7 +238,7 @@ func encode(s *statement) *Instruction {
 					modRM := composeModRM(mod, reg, rm)
 
 					sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
-					num := op2dtype.expr.(*numberExpr).val
+					num := op2dtype.expr.(*numberLit).val
 					displacement, err := strconv.ParseInt(num, 0, 8)
 					if err != nil {
 						panic(err)
@@ -270,7 +270,7 @@ func encode(s *statement) *Instruction {
 				relaTextUsers = append(relaTextUsers, ru)
 			} else if op1regi.name == "rsp" {
 				var opcode uint8 = 0x8b
-				if  op1.expr.(*numberExpr).val == "0" {
+				if  op1.expr.(*numberLit).val == "0" {
 					var mod uint8 = 0b000 // indirection
 					var rm = regBits("sp")
 					reg := op2regi.toBits()
@@ -283,7 +283,7 @@ func encode(s *statement) *Instruction {
 					reg := op2regi.toBits()
 					modRM := composeModRM(mod, reg, rm)
 					sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
-					offset, err := strconv.ParseInt(op1.expr.(*numberExpr).val, 0, 8)
+					offset, err := strconv.ParseInt(op1.expr.(*numberLit).val, 0, 8)
 					if err != nil {
 						panic(err)
 					}
@@ -315,15 +315,12 @@ func encode(s *statement) *Instruction {
 			rm := op2.ifc.(*register).toBits()
 			modRM := composeModRM(ModRegi, regi, rm)
 			r = []byte{REX_W, opcode, modRM}
-		case *immediate:
+		case *immediate: // "addq $32, %regi"
 			opcode := uint8(0x83)
-			reg := op2.ifc.(*register).toBits()
-			modRM := composeModRM(0b11, reg, 0)
+			rm := op2.ifc.(*register).toBits()
+			modRM := composeModRM(0b11, 0, rm)
 			imm := op1.ifc.(*immediate)
-			imValue, err := strconv.ParseInt(imm.expr, 0, 8)
-			if err != nil {
-				panic(err)
-			}
+			imValue := evalNumExpr(imm.expr)
 			r = []byte{REX_W, opcode, modRM, uint8(imValue)} // REX.W, IMULQ, ModR/M, ib
 		default:
 			panic("TBI")
@@ -336,7 +333,7 @@ func encode(s *statement) *Instruction {
 		const reg5 = 5
 		modRM := composeModRM(ModRegi, reg5, rm)
 		imm := op1.ifc.(*immediate)
-		imValue, err := strconv.ParseInt(imm.expr, 0, 8)
+		imValue, err := strconv.ParseInt(imm.expr.(*numberLit).val, 0, 8)
 		if err != nil {
 			panic(err)
 		}
@@ -349,7 +346,7 @@ func encode(s *statement) *Instruction {
 		reg := op2.ifc.(*register).toBits()
 		modRM := composeModRM(0b11, reg, 0)
 		imm := op1.ifc.(*immediate)
-		imValue, err := strconv.ParseInt(imm.expr, 0, 8)
+		imValue, err := strconv.ParseInt(imm.expr.(*numberLit).val, 0, 8)
 		if err != nil {
 			panic(err)
 		}
@@ -359,7 +356,7 @@ func encode(s *statement) *Instruction {
 		case *register:
 			r = []byte{0x50 + op.toBits()}
 		case *immediate:
-			imValue, err := strconv.ParseInt(op.expr, 0, 8)
+			imValue, err := strconv.ParseInt(op.expr.(*numberLit).val, 0, 8)
 			if err != nil {
 				panic(err)
 			}
@@ -402,7 +399,7 @@ func encodeData(s *statement) []byte {
 		op := s.operands[0]
 		//debugf(".quad type=%T\n", op.ifc)
 		switch opDtype := op.ifc.(type) {
-		case *numberExpr:
+		case *numberLit:
 			rawVal := opDtype.val
 			var i int64
 			if strings.HasPrefix(rawVal, "0x") {
