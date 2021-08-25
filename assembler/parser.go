@@ -346,7 +346,7 @@ type operand struct {
 }
 
 type statement struct {
-	raw         []byte
+	raw         string
 	labelSymbol string
 	keySymbol   string
 	operands    []*operand
@@ -459,7 +459,7 @@ func parse() []*statement {
 		idxBegin := idx
 		s := parseStmt()
 		idxEnd := idx
-		s.raw = source[idxBegin : idxEnd-1]
+		s.raw = string(source[idxBegin : idxEnd-1])
 		stmts = append(stmts, s)
 		i++
 	}
