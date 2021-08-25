@@ -289,11 +289,24 @@ func encode(s *statement) *Instruction {
 		r = []byte{opcode, modRM}
 	case "addq":
 		r = []byte{REX_W, 0x01, 0xc7} // REX.W, ADD, ModR/M
+	case "subq":
+		op1, op2 := s.operands[0], s.operands[1]
+		opcode := uint8(0x83)
+		rm := op2.ifc.(*register).toBits()
+		// modRM = 0xec = 1110_1100 = 11_101_100 = 11_/5_sp
+		const reg5 = 5
+		modRM := composeModRM(ModRegi, reg5, rm)
+		imm := op1.ifc.(*immediate)
+		imValue, err := strconv.ParseInt(imm.expr,0,8)
+		if err != nil {
+			panic(err)
+		}
+		r = []byte{REX_W, opcode, modRM, uint8(imValue)}
 	case "imulq":
 		// IMUL r64, r/m64, imm8
 		// Quadword register := r/m64 ∗ sign-extended immediate byte.
 		op1, op2 := s.operands[0], s.operands[1]
-		var opcode uint8 = 0x6b
+		opcode := uint8(0x6b)
 		reg := op2.ifc.(*register).toBits()
 		modRM := composeModRM(0b11, reg, 0)
 		imm := op1.ifc.(*immediate)
@@ -302,6 +315,14 @@ func encode(s *statement) *Instruction {
 			panic(err)
 		}
 		r = []byte{REX_W, opcode, modRM, uint8(imValue)} // REX.W, IMULQ, ModR/M, ib
+	case "pushq":
+		_op1 := s.operands[0]
+		switch op := _op1.ifc.(type) {
+		case *register:
+			r = []byte{0x50 + op.toBits()}
+		default:
+			panic("[encoder] TBI:" + string(s.raw))
+		}
 	case "ret", "retq":
 		r = []byte{0xc3}
 	case "syscall":
