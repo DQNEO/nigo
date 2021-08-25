@@ -265,6 +265,19 @@ func encode(s *statement) *Instruction {
 		r = []byte{opcode, modRM}
 	case "addq":
 		r = []byte{REX_W, 0x01, 0xc7} // REX.W, ADD, ModR/M
+	case "imulq":
+		// IMUL r64, r/m64, imm8
+		// Quadword register := r/m64 ∗ sign-extended immediate byte.
+		op1, op2 := s.operands[0], s.operands[1]
+		var opcode uint8 = 0x6b
+		reg := op2.ifc.(*register).toBits()
+		modRM := composeModRM(0b11, reg, 0)
+		imm := op1.ifc.(*immediate)
+		imValue, err := strconv.ParseInt(imm.expr,0,8)
+		if err != nil {
+			panic(err)
+		}
+		r = []byte{REX_W, opcode, modRM, uint8(imValue)} // REX.W, IMULQ, ModR/M, ib
 	case "ret", "retq":
 		r = []byte{0xc3}
 	case "syscall":
