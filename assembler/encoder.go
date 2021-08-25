@@ -8,23 +8,44 @@ import (
 	"unsafe"
 )
 
+// Intel SDM
+// Volume 2 Instruction Set Reference
+// CHAPTER 2 INSTRUCTION FORMAT
+//
+
 const REX_W byte = 0x48
 
 const ModRegiToRegi uint8 = 0b11
+
+//  2.1.3 ModR/M and SIB Bytes
+//
+//    7   6   5   4   3   2   1   0
+//  +---+---+---+---+---+---+---+---+
+//  |  mod  | reg/opcode|    r/m    |
+//  +---+---+---+---+---+---+---+---+
+//
+//  Many instructions that refer to an operand in memory have an addressing-form specifier byte (called the ModR/M
+//  byte) following the primary opcode. The ModR/M byte contains three fields of information:
+//  • The mod field combines with the r/m field to form 32 possible values: eight registers and 24 addressing modes.
+//  • The reg/opcode field specifies either a register number or three more bits of opcode information. The purpose
+//  of the reg/opcode field is specified in the primary opcode.
+//  • The r/m field can specify a register as an operand or it can be combined with the mod field to encode an
+//  addressing mode. Sometimes, certain combinations of the mod field and the r/m field are used to express
+//  opcode information for some instructions.
+//
+//  Certain encodings of the ModR/M byte require a second addressing byte (the SIB byte). The base-plus-index and
+//  scale-plus-index forms of 32-bit addressing require the SIB byte.
+//  The SIB byte includes the following fields:
+//  • The scale field specifies the scale factor.
+//  • The index field specifies the register number of the index register.
+//  • The base field specifies the register number of the base register.
+//  See Section 2.1.5 for the encodings of the ModR/M and SIB bytes.
 const ModIndirectionWithNoDisplacement uint8 = 0b00
 const ModIndirectionWithDisplacement8 uint8 = 0b01
 const ModIndirectionWithDisplacement32 uint8 = 0b10
 
 const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 
-// ModR/M
-// https://wiki.osdev.org/X86-64_Instruction_Encoding#ModR.2FM
-// The ModR/M byte encodes a register or an opcode extension, and a register or a memory address. It has the following fields:
-//
-//    7   6   5   4   3   2   1   0
-//  +---+---+---+---+---+---+---+---+
-//  |  mod  |    reg    |     rm    |
-//  +---+---+---+---+---+---+---+---+
 func composeModRM(mod byte, reg byte, rm byte) byte {
 	return mod * 64 + reg * 8 + rm
 }
