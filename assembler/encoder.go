@@ -15,7 +15,6 @@ import (
 
 const REX_W byte = 0x48
 
-const ModRegiToRegi uint8 = 0b11
 
 //  2.1.3 ModR/M and SIB Bytes
 //
@@ -40,6 +39,8 @@ const ModRegiToRegi uint8 = 0b11
 //  • The index field specifies the register number of the index register.
 //  • The base field specifies the register number of the base register.
 //  See Section 2.1.5 for the encodings of the ModR/M and SIB bytes.
+
+const ModRegi uint8 = 0b11
 const ModIndirectionWithNoDisplacement uint8 = 0b00
 const ModIndirectionWithDisplacement8 uint8 = 0b01
 const ModIndirectionWithDisplacement32 uint8 = 0b10
@@ -49,6 +50,8 @@ const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 func composeModRM(mod byte, reg byte, rm byte) byte {
 	return mod * 64 + reg * 8 + rm
 }
+
+const REG_NONE = 0b101
 
 // The registers are encoded using the 4-bit values in the X.Reg column of the following table.
 // X.Reg is in binary.
@@ -60,7 +63,7 @@ func regBits(reg string) uint8 {
 	case "dx": x_reg = 0b0010
 	case "bx": x_reg = 0b0011
 	case "sp": x_reg = 0b0100
-	case "bp": x_reg = 0b0101 // NONE
+	case "bp": x_reg = 0b0101 // or /5
 	case "si": x_reg = 0b0110
 	case "di": x_reg = 0b0111
 	default:
@@ -189,7 +192,7 @@ func encode(s *statement) *Instruction {
 			var opcode uint8 = 0x89
 			switch op2dtype := op2.ifc.(type) {
 			case *register:
-				mod := ModRegiToRegi
+				mod := ModRegi
 				reg := op1.toBits() // src
 				op2Regi := op2.ifc.(*register)
 				rm :=  op2Regi.toBits()  // dst
