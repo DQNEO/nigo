@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# one-line encoder
+#
+cat > /tmp/input.s
+if [[ -z "$1" ]]; then
+  echo "Please specify an asseembler"
+  exit 1
+fi
+assembler=$1
+
+rm -f ./a.out
+$assembler < /tmp/input.s && objdump -d  | tail -n 1
