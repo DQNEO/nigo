@@ -9,13 +9,8 @@ import (
 	"unsafe"
 )
 
-type section struct {
-	sh_name    string
-	shndx      int
-	header     *ElfSectionHeader
-	numZeroPad uintptr
-	zeros      []uint8
-	contents   []uint8
+func debugf(s string, a...interface{}) {
+	fmt.Fprintf(os.Stderr, s, a...)
 }
 
 func buildSectionBodies(hasRelaText, hasRelaData, hasSymbols bool) []*section {
@@ -39,6 +34,15 @@ func buildSectionBodies(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 
 	sections = append(sections,s_shstrtab)
 	return sections
+}
+
+type section struct {
+	sh_name    string
+	shndx      int
+	header     *ElfSectionHeader
+	numZeroPad uintptr
+	zeros      []uint8
+	contents   []uint8
 }
 
 // .symtab
@@ -279,7 +283,7 @@ func resolveShNames(ss []*section) {
 		sh_name := s.sh_name
 		idx := bytes.Index(s_shstrtab.contents, []byte(sh_name))
 		if idx <= 0 {
-			fmt.Fprintf(os.Stderr, "idx of sh %s = %d\n", s.sh_name, idx)
+			debugf("idx of sh %s = %d\n", s.sh_name, idx)
 			panic(  s.sh_name + " is not found in .strtab contents")
 		}
 		s.header.sh_name = uint32(idx)
@@ -316,7 +320,7 @@ func buildSymbolTable(hasRelaData bool) {
 	}
 	var orderedNonGlobalSymbols []string
 	var ordererGlobalSymbols []string
-	fmt.Fprintf(os.Stderr, "globalSymbols=%v\n", globalSymbols)
+	//debugf("globalSymbols=%v\n", globalSymbols)
 	for _, sym := range orderedSymbolNames {
 		if globalSymbols[sym] {
 			ordererGlobalSymbols = append(ordererGlobalSymbols, sym)
@@ -325,13 +329,13 @@ func buildSymbolTable(hasRelaData bool) {
 		}
 	}
 	orderedAllsymbols := append(orderedNonGlobalSymbols,ordererGlobalSymbols...)
-	fmt.Fprintf(os.Stderr, "orderedAllsymbols=%v\n", orderedAllsymbols)
+	//debugf("orderedAllsymbols=%v\n", orderedAllsymbols)
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
 	for _, symname := range orderedAllsymbols {
 		sym, ok := allSymbols[symname]
 		if !ok {
-			fmt.Fprintf(os.Stderr, "symbol not found :" + symname)
+			//debugf("symbol not found :" + symname)
 			continue
 		}
 		index++
@@ -353,10 +357,10 @@ func buildSymbolTable(hasRelaData bool) {
 			st_info = 0x10 // GLOBAL ?
 			if indexOfFirstNonLocalSymbol == 0 {
 				indexOfFirstNonLocalSymbol = index
-				fmt.Fprintf(os.Stderr, "indexOfFirstNonLocalSymbol=%d\n", indexOfFirstNonLocalSymbol)
+				//debugf("indexOfFirstNonLocalSymbol=%d\n", indexOfFirstNonLocalSymbol)
 			}
 		}
-		fmt.Fprintf(os.Stderr, "symbol %s shndx = %d\n", sym.name, shndx)
+		//debugf("symbol %s shndx = %d\n", sym.name, shndx)
 		e := &ElfSym{
 			st_name:  uint32(name_offset),
 			st_info:  st_info,
@@ -388,7 +392,7 @@ func translateData(s *statement) []byte {
 	switch s.keySymbol {
 	case ".quad":
 		op := s.operands[0]
-		fmt.Fprintf(os.Stderr, ".quad type=%T\n", op.ifc)
+		//debugf(".quad type=%T\n", op.ifc)
 		switch opDtype := op.ifc.(type) {
 		case *numberExpr:
 			rawVal := opDtype.val
@@ -501,7 +505,7 @@ type Instruction struct {
 }
 
 func encode(s *statement) *Instruction {
-	//fmt.Fprintf(os.Stderr, "stmt=%#v\n", s)
+	//debugf("stmt=%#v\n", s)
 	var r []byte
 	var instr = &Instruction{
 		startAddr:   currentTextAddr,
@@ -561,7 +565,7 @@ func encode(s *statement) *Instruction {
 	//	//op1Regi, IsOp1Regi := op1.ifc.(*register)
 	//	op2Regi := op2.ifc.(*register)
 	//
-	//	//fmt.Fprintf(os.Stderr, "op1,op2=%s,%s  ", op1, op2)
+	//	//debugf("op1,op2=%s,%s  ", op1, op2)
 	//	intNum, err := strconv.ParseInt(op1.string, 0, 32)
 	//	if err != nil {
 	//		panic(err)
@@ -738,6 +742,8 @@ func dumpCode(code []byte) string {
 	return strings.Join(r, " ")
 }
 
+var debugEncoder bool
+
 func assembleCode(ss []*statement) []byte {
 	var code []byte
 	for _, s := range ss {
@@ -748,23 +754,25 @@ func assembleCode(ss []*statement) []byte {
 		instr := encode(s)
 		buf := instr.code
 		currentTextAddr += uintptr(len(buf))
-		fmt.Fprintf(os.Stderr, "[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw,  dumpCode(buf))
+		if debugEncoder {
+			debugf("[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw,  dumpCode(buf))
+		}
 		code = append(code, buf...)
 	}
 
-	fmt.Fprintf(os.Stderr, "iterating unresolvedCodeSymbols...\n")
+	//debugf("iterating unresolvedCodeSymbols...\n")
 	for codeAddr, replaceInfo := range unresolvedCodeSymbols {
 		sym, ok := allSymbols[replaceInfo.symbolUsed]
 		if !ok {
-			fmt.Fprintf(os.Stderr, "  symbol not found: %s\n" , replaceInfo.symbolUsed)
+			//debugf("  symbol not found: %s\n" , replaceInfo.symbolUsed)
 		} else {
-			fmt.Fprintf(os.Stderr, "  found symbol:%v\n", sym.name)
+			//debugf("  found symbol:%v\n", sym.name)
 			diff := sym.address - replaceInfo.nextInstrAddr
 			if diff > 255 {
 				panic("diff is too large")
 			}
-			fmt.Fprintf(os.Stderr, "  patching symol addr into code : %s=%02x => %02x (%02x - %02x)\n",
-				sym.name, codeAddr, diff, sym.address , replaceInfo.nextInstrAddr)
+			//debugf("  patching symol addr into code : %s=%02x => %02x (%02x - %02x)\n",
+			//	sym.name, codeAddr, diff, sym.address , replaceInfo.nextInstrAddr)
 			code[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
 		}
 	}
@@ -803,7 +811,7 @@ func main() {
 	}
 
 	stmts := parse()
-	dumpStmts(stmts)
+	//dumpStmts(stmts)
 
 	var seenSymbols = make(map[string]bool)
 	var currentSection string
@@ -864,7 +872,7 @@ func main() {
 	s_text.contents = code
 
 	data := assembleData(dataStmts)
-	//fmt.Fprintf(os.Stderr, "mapDataLabelAddr=%v\n", mapDataLabelAddr)
+	//debugf("mapDataLabelAddr=%v\n", mapDataLabelAddr)
 	s_data.contents = data
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
@@ -906,10 +914,10 @@ func main() {
 		var rela_text_c []byte
 
 		for _ , ru := range relaTextUsers {
-			fmt.Fprintf(os.Stderr, "re.uses:%s\n", ru.uses)
+			//debugf("re.uses:%s\n", ru.uses)
 			sym, ok := allSymbols[ru.uses]
 			if !ok {
-				fmt.Fprintf(os.Stderr, "symbol not found:" + ru.uses)
+			//	debugf("symbol not found:" + ru.uses)
 				continue
 			}
 

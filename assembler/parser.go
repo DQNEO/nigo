@@ -476,13 +476,13 @@ func dumpStmt(i int, stmt *statement) {
 		//for _, o := range stmt.operands {
 		//	ops = append(ops, o.string)
 		//}
-		//fmt.Fprintf(os.Stderr, "%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
+		//debugf("%04d|%29s: |%30s | %s\n", i, stmt.labelSymbol, stmt.keySymbol, strings.Join(ops, "  , "))
 	}
 
 }
 
 func dumpStmts(stmts []*statement) {
-	fmt.Fprintf(os.Stderr, "%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
+	debugf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
 	for i, stmt := range stmts {
 		if stmt == emptyStatement {
 			continue
