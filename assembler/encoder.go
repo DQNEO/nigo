@@ -326,6 +326,12 @@ func encode(s *statement) *Instruction {
 		switch op := _op1.ifc.(type) {
 		case *register:
 			r = []byte{0x50 + op.toBits()}
+		case *immediate:
+			imValue, err := strconv.ParseInt(op.expr, 0, 8)
+			if err != nil {
+				panic(err)
+			}
+			r = []byte{0x6a , uint8(imValue)}
 		default:
 			panic("[encoder] TBI:" + string(s.raw))
 		}
