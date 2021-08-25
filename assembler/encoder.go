@@ -79,6 +79,12 @@ func encode(s *statement) *Instruction {
 	if s.labelSymbol != "" {
 		allSymbols[s.labelSymbol].address = currentTextAddr
 	}
+
+	if s.labelSymbol != "" && s.keySymbol == "" {
+		//fmt.Printf(" (label)\n")
+		return instr
+	}
+
 	//fmt.Printf("[translator] %s (%d ops) => ", s.keySymbol, len(s.operands))
 	switch s.keySymbol {
 	case "nop":
@@ -265,22 +271,10 @@ func encode(s *statement) *Instruction {
 		r = []byte{0x0f, 0x05}
 	case ".text":
 		//fmt.Printf(" skip\n")
-	case "imulq":
-	case "subq":
-	case "pushq":
-	case "popq":
+	case ".global":
+		// Ignore. captured in main routine
 	default:
-		if strings.HasPrefix(s.keySymbol , ".") {
-			//fmt.Printf(" (directive)\n")
-		} else {
-			if s.labelSymbol != "" && s.keySymbol == "" {
-				//fmt.Printf(" (label)\n")
-				return instr
-			} else {
-				panic("Unexpected key symbols:" + s.keySymbol)
-			}
-		}
-		//return nil
+		panic("[encoder] TBI:" + string(s.raw))
 	}
 
 	//fmt.Printf("=>  %#x\n", r)
