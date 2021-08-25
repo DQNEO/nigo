@@ -322,8 +322,7 @@ func encode(s *statement) *Instruction {
 		}
 		r = []byte{REX_W, opcode, modRM, uint8(imValue)} // REX.W, IMULQ, ModR/M, ib
 	case "pushq":
-		_op1 := s.operands[0]
-		switch op := _op1.ifc.(type) {
+		switch op := s.operands[0].ifc.(type) {
 		case *register:
 			r = []byte{0x50 + op.toBits()}
 		case *immediate:
