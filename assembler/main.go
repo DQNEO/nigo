@@ -421,7 +421,7 @@ func dumpCode(code []byte) string {
 	return strings.Join(r, " ")
 }
 
-var debugEncoder bool
+var debugEncoder bool = true
 
 func assembleCode(ss []*statement) []byte {
 	var code []byte

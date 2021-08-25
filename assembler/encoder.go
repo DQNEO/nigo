@@ -270,12 +270,25 @@ func encode(s *statement) *Instruction {
 				relaTextUsers = append(relaTextUsers, ru)
 			} else if op1regi.name == "rsp" {
 				var opcode uint8 = 0x8b
-				var mod uint8 = 0b000 // indirection
-				var rm = regBits("sp")
-				reg := op2regi.toBits()
-				modRM := composeModRM(mod, reg, rm)
-				sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
-				r = []byte{REX_W, opcode, modRM, sib}
+				if  op1.expr.(*numberExpr).val == "0" {
+					var mod uint8 = 0b000 // indirection
+					var rm = regBits("sp")
+					reg := op2regi.toBits()
+					modRM := composeModRM(mod, reg, rm)
+					sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
+					r = []byte{REX_W, opcode, modRM, sib}
+				} else {
+					var mod uint8 = ModIndirectionWithDisplacement8
+					var rm = regBits("sp")
+					reg := op2regi.toBits()
+					modRM := composeModRM(mod, reg, rm)
+					sib := composeSIB(0b00, SibIndexNone, SibBaseRSP)
+					offset, err := strconv.ParseInt(op1.expr.(*numberExpr).val, 0, 8)
+					if err != nil {
+						panic(err)
+					}
+					r = []byte{REX_W, opcode, modRM, sib, uint8(offset)}
+				}
 			} else {
 				var opcode uint8 = 0x8b
 				reg := op2regi.toBits()
@@ -294,7 +307,27 @@ func encode(s *statement) *Instruction {
 		var modRM uint8 = 0b11000000 + regFieldN
 		r = []byte{opcode, modRM}
 	case "addq":
-		r = []byte{REX_W, 0x01, 0xc7} // REX.W, ADD, ModR/M
+		op1, op2 := s.operands[0], s.operands[1]
+		opcode := uint8(0x01)
+		switch op1.ifc.(type) {
+		case *register:
+			regi := op1.ifc.(*register).toBits()
+			rm := op2.ifc.(*register).toBits()
+			modRM := composeModRM(ModRegi, regi, rm)
+			r = []byte{REX_W, opcode, modRM}
+		case *immediate:
+			opcode := uint8(0x83)
+			reg := op2.ifc.(*register).toBits()
+			modRM := composeModRM(0b11, reg, 0)
+			imm := op1.ifc.(*immediate)
+			imValue, err := strconv.ParseInt(imm.expr, 0, 8)
+			if err != nil {
+				panic(err)
+			}
+			r = []byte{REX_W, opcode, modRM, uint8(imValue)} // REX.W, IMULQ, ModR/M, ib
+		default:
+			panic("TBI")
+		}
 	case "subq":
 		op1, op2 := s.operands[0], s.operands[1]
 		opcode := uint8(0x83)
