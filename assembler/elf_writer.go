@@ -5,7 +5,6 @@ import (
 	"unsafe"
 )
 
-
 // ELF format
 // see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
 // see https://man7.org/linux/man-pages/man5/elf.5.html
@@ -40,20 +39,20 @@ type ElfFile struct {
 //  	Elf64_Half	e_shstrndx;		/* Section header string table index */
 //  } Elf64_Ehdr;
 type Elf64_Ehdr struct {
-	e_ident [16]uint8
-	e_type uint16
-	e_machine uint16 // 20
-	e_version uint32 // 24
-	e_entry uintptr // 32
-	e_phoff uintptr // 40
-	e_shoff uintptr // 48
-	e_flags uint32 // 52
-	e_ehsize uint16
+	e_ident     [16]uint8
+	e_type      uint16
+	e_machine   uint16  // 20
+	e_version   uint32  // 24
+	e_entry     uintptr // 32
+	e_phoff     uintptr // 40
+	e_shoff     uintptr // 48
+	e_flags     uint32  // 52
+	e_ehsize    uint16
 	e_phentsize uint16
-	e_phnum uint16
+	e_phnum     uint16
 	e_shentsize uint16
-	e_shnum uint16
-	e_shstrndx uint16 // 64
+	e_shnum     uint16
+	e_shstrndx  uint16 // 64
 }
 
 const ELFHeaderSize = unsafe.Sizeof(Elf64_Ehdr{})
@@ -70,16 +69,16 @@ var elfHeader = &Elf64_Ehdr{
 		0x00,                                     // EI_ABIVERSION:
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // EI_PAD: always zero.
 	},
-	e_type: 1, // ET_REL
-	e_machine: 0x3e, // AMD x86-64
-	e_version: 1,
-	e_entry:0,
-	e_phoff: 0,
-	e_flags:0,
-	e_ehsize: uint16(ELFHeaderSize),
-	e_phentsize:0,
-	e_phnum:0,
-	e_shentsize:uint16(SectionHeaderEntrySize), // 64
+	e_type:      1,    // ET_REL
+	e_machine:   0x3e, // AMD x86-64
+	e_version:   1,
+	e_entry:     0,
+	e_phoff:     0,
+	e_flags:     0,
+	e_ehsize:    uint16(ELFHeaderSize),
+	e_phentsize: 0,
+	e_phnum:     0,
+	e_shentsize: uint16(SectionHeaderEntrySize), // 64
 }
 
 // Part2: Section Bodies
@@ -87,7 +86,6 @@ type ElfSectionBodies struct {
 	zeros []uint8
 	body  []uint8
 }
-
 
 // Relocation entries (Rel & Rela)
 // Relocation is the process of connecting symbolic references with
@@ -125,7 +123,7 @@ type ElfSectionBodies struct {
 //              the value to be stored into the relocatable field.
 type ElfRela struct {
 	r_offset uintptr
-	r_info uint64
+	r_info   uint64
 	r_addend int64
 }
 
@@ -164,7 +162,7 @@ type ElfSym struct {
 	// #define STT_HIOS        12              /* End of OS-specific */
 	// #define STT_LOPROC      13              /* Start of processor-specific */
 	// #define STT_HIPROC      15              /* End of processor-specific */
-	st_info uint8
+	st_info  uint8
 	st_other uint8
 	//  Every symbol table entry is "defined" in relation to some
 	//  section.  This member holds the relevant section header
@@ -172,9 +170,8 @@ type ElfSym struct {
 	st_shndx uint16
 	// This member gives the value of the associated symbol.
 	st_value uintptr
-	st_size uint64
+	st_size  uint64
 }
-
 
 // # Part3: Section Header Table
 
@@ -204,8 +201,8 @@ type ElfSectionHeader struct {
 
 	// This member holds a section header table index link,
 	// whose interpretation depends on the section type.
-	sh_link   uint32  // 44
-	sh_info   uint32  // 48
+	sh_link uint32 // 44
+	sh_info uint32 // 48
 
 	// Some sections have address alignment constraints.  If a
 	// section holds a doubleword, the system must ensure
@@ -215,11 +212,10 @@ type ElfSectionHeader struct {
 	// powers of two are allowed.  The value 0 or 1 means that
 	// the section has no alignment constraints.
 	sh_addralign uintptr // 56
-	sh_entsize uintptr // 64
+	sh_entsize   uintptr // 64
 }
 
 const SectionHeaderEntrySize = unsafe.Sizeof(ElfSectionHeader{})
-
 
 func (elfFile *ElfFile) writeTo(w io.Writer) {
 	// Part 1: Write ELF Header

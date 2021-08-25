@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func debugf(s string, a...interface{}) {
+func debugf(s string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, s, a...)
 }
 
@@ -31,7 +31,7 @@ func buildSectionBodies(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 		sections = append(sections, s_rela_data)
 	}
 
-	sections = append(sections,s_shstrtab)
+	sections = append(sections, s_shstrtab)
 	return sections
 }
 
@@ -52,8 +52,8 @@ var symbolTable = []*ElfSym{
 func prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 
 	r := []*section{
-		s_null,      // NULL
-		s_text,      // .text
+		s_null, // NULL
+		s_text, // .text
 	}
 
 	if hasRelaText {
@@ -152,7 +152,7 @@ var s_bss = &section{
 //  ".symtab"
 //  SHT_SYMTAB (symbol table)
 var s_symtab = &section{
-	sh_name: ".symtab",
+	sh_name:  ".symtab",
 	header:   sh_symtab,
 	contents: nil,
 }
@@ -199,17 +199,17 @@ var indexOfFirstNonLocalSymbol int
 
 // ".symtab"
 var sh_symtab = &ElfSectionHeader{
-	sh_type:      0x02, // SHT_SYMTAB
-	sh_flags:     0,
-	sh_addr:      0,
-//	sh_link:      0x05, // section index of .strtab ?
+	sh_type:  0x02, // SHT_SYMTAB
+	sh_flags: 0,
+	sh_addr:  0,
+	//	sh_link:      0x05, // section index of .strtab ?
 	sh_addralign: 0x08,
 	sh_entsize:   0x18,
 }
 
 func calcOffsetOfSection(s *section, prev *section) {
 	tentative_offset := prev.header.sh_offset + prev.header.sh_size
-	var align  = s.header.sh_addralign
+	var align = s.header.sh_addralign
 	if align == 0 || align == 1 {
 		s.numZeroPad = 0
 	} else {
@@ -242,7 +242,7 @@ func makeSectionNames(hasRelaText, hasRelaData, hasSymbols bool) []string {
 	var sectionNames []string
 
 	if hasSymbols {
-		sectionNames = append(sectionNames, ".symtab",".strtab")
+		sectionNames = append(sectionNames, ".symtab", ".strtab")
 	}
 
 	var dataName string = ".data"
@@ -265,7 +265,6 @@ func makeSectionNames(hasRelaText, hasRelaData, hasSymbols bool) []string {
 	return sectionNames
 }
 
-
 // Make contents of .shstrtab"
 func makeShStrTab(sectionNames []string) {
 	var data []byte = []byte{0x00}
@@ -283,15 +282,15 @@ func resolveShNames(ss []*section) {
 		idx := bytes.Index(s_shstrtab.contents, []byte(sh_name))
 		if idx <= 0 {
 			debugf("idx of sh %s = %d\n", s.sh_name, idx)
-			panic(  s.sh_name + " is not found in .strtab contents")
+			panic(s.sh_name + " is not found in .strtab contents")
 		}
 		s.header.sh_name = uint32(idx)
 	}
 }
 
 type symbolStruct struct {
-	name       string
-	section    string
+	name    string
+	section string
 	address uintptr
 }
 
@@ -327,7 +326,7 @@ func buildSymbolTable(hasRelaData bool) {
 			orderedNonGlobalSymbols = append(orderedNonGlobalSymbols, sym)
 		}
 	}
-	orderedAllsymbols := append(orderedNonGlobalSymbols,ordererGlobalSymbols...)
+	orderedAllsymbols := append(orderedNonGlobalSymbols, ordererGlobalSymbols...)
 	//debugf("orderedAllsymbols=%v\n", orderedAllsymbols)
 	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
@@ -383,18 +382,18 @@ type relaDataUser struct {
 
 var relaDataUsers []*relaDataUser
 
-
 type addrToReplace struct {
 	nextInstrAddr uintptr
-	symbolUsed string
+	symbolUsed    string
 }
-var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
+var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
 type relaTextUser struct {
 	addr uintptr
 	uses string
 }
+
 var relaTextUsers []*relaTextUser
 
 func assert(bol bool, errorMsg string) {
@@ -435,7 +434,7 @@ func assembleCode(ss []*statement) []byte {
 		buf := instr.code
 		currentTextAddr += uintptr(len(buf))
 		if debugEncoder {
-			debugf("[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw,  dumpCode(buf))
+			debugf("[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw, dumpCode(buf))
 		}
 		code = append(code, buf...)
 	}
@@ -470,7 +469,6 @@ func assembleData(ss []*statement) []byte {
 	}
 	return data
 }
-
 
 func dumpProgram() {
 	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
@@ -528,7 +526,7 @@ func main() {
 			}
 		case ".text":
 			textStmts = append(textStmts, s)
-			if s.keySymbol == "call" ||  s.keySymbol == "callq" {
+			if s.keySymbol == "call" || s.keySymbol == "callq" {
 				sym := s.operands[0].ifc.(*symbolExpr).name
 				if !seenSymbols[sym] {
 					orderedSymbolNames = append(orderedSymbolNames, sym)
@@ -558,14 +556,14 @@ func main() {
 	hasRelaText := len(relaTextUsers) > 0
 	hasRelaData := len(relaDataUsers) > 0
 	hasSymbols := len(allSymbols) > 0
-	sectionHeaders := prepareSHTEntries(hasRelaText,hasRelaData, hasSymbols)
+	sectionHeaders := prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols)
 	if len(allSymbols) > 0 {
 		buildSymbolTable(hasRelaData)
 	}
 
 	// build rela_data contents
 	var rela_data_c []byte
-	for _ , ru := range relaDataUsers {
+	for _, ru := range relaDataUsers {
 		sym, ok := allSymbols[ru.uses]
 		if !ok {
 			panic("label not found")
@@ -592,11 +590,11 @@ func main() {
 	if len(relaTextUsers) > 0 {
 		var rela_text_c []byte
 
-		for _ , ru := range relaTextUsers {
+		for _, ru := range relaTextUsers {
 			//debugf("re.uses:%s\n", ru.uses)
 			sym, ok := allSymbols[ru.uses]
 			if !ok {
-			//	debugf("symbol not found:" + ru.uses)
+				//	debugf("symbol not found:" + ru.uses)
 				continue
 			}
 
@@ -610,18 +608,18 @@ func main() {
 		}
 		s_rela_text.contents = rela_text_c
 
-//		s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
-//		sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
-//		if needRelaData {
-//			s_rela_data.header.sh_link = uint32(s_symtab.shndx)
-//			s_rela_data.header.sh_info = uint32(s_data.shndx)
-//		}
+		//		s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
+		//		sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
+		//		if needRelaData {
+		//			s_rela_data.header.sh_link = uint32(s_symtab.shndx)
+		//			s_rela_data.header.sh_info = uint32(s_data.shndx)
+		//		}
 	}
 
-	sectionNames := makeSectionNames(hasRelaText,hasRelaData, hasSymbols)
+	sectionNames := makeSectionNames(hasRelaText, hasRelaData, hasSymbols)
 	makeShStrTab(sectionNames)
 
-	sectionBodies := buildSectionBodies(hasRelaText,hasRelaData, hasSymbols)
+	sectionBodies := buildSectionBodies(hasRelaText, hasRelaData, hasSymbols)
 	resolveShNames(sectionBodies)
 
 	// prepare ELF File format
@@ -633,14 +631,13 @@ func determineSectionOffsets(sectionBodies []*section) {
 	firtSectionInBodies := sectionBodies[0]
 	firtSectionInBodies.header.sh_offset = ELFHeaderSize
 	firtSectionInBodies.header.sh_size = uintptr(len(firtSectionInBodies.contents))
-	for i := 1; i<len(sectionBodies);i++ {
+	for i := 1; i < len(sectionBodies); i++ {
 		calcOffsetOfSection(
 			sectionBodies[i], sectionBodies[i-1])
 	}
 }
 
-
-func calcEShoff(last *ElfSectionHeader) (uintptr,uintptr) {
+func calcEShoff(last *ElfSectionHeader) (uintptr, uintptr) {
 
 	endOfLastSection := last.sh_offset + last.sh_size
 
@@ -659,7 +656,7 @@ func prepareElfFile(sectionBodies []*section, sectionHeaders []*section) *ElfFil
 	// Calculates offset and zero padding
 	determineSectionOffsets(sectionBodies)
 
-	lastSectionHeader := sectionHeaders[len(sectionHeaders) -1].header
+	lastSectionHeader := sectionHeaders[len(sectionHeaders)-1].header
 	paddingBeforeSHT, eshoff := calcEShoff(lastSectionHeader)
 
 	elfHeader.e_shoff = eshoff
@@ -688,9 +685,9 @@ func prepareElfFile(sectionBodies []*section, sectionHeaders []*section) *ElfFil
 	}
 
 	return &ElfFile{
-		header:          elfHeader,
-		sections :       sections,
-		zerosBeforeSHT : make([]uint8, paddingBeforeSHT),
-		sht :            sht,
+		header:         elfHeader,
+		sections:       sections,
+		zerosBeforeSHT: make([]uint8, paddingBeforeSHT),
+		sht:            sht,
 	}
 }

@@ -15,7 +15,6 @@ import (
 
 const REX_W byte = 0x48
 
-
 //  2.1.3 ModR/M and SIB Bytes
 //
 //    7   6   5   4   3   2   1   0
@@ -48,7 +47,7 @@ const ModIndirectionWithDisplacement32 uint8 = 0b10
 const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 
 func composeModRM(mod byte, reg byte, rm byte) byte {
-	return mod * 64 + reg * 8 + rm
+	return mod*64 + reg*8 + rm
 }
 
 const REG_NONE = 0b101
@@ -58,14 +57,22 @@ const REG_NONE = 0b101
 func regBits(reg string) uint8 {
 	var x_reg uint8
 	switch reg {
-	case "ax": x_reg = 0b0000
-	case "cx": x_reg = 0b0001
-	case "dx": x_reg = 0b0010
-	case "bx": x_reg = 0b0011
-	case "sp": x_reg = 0b0100
-	case "bp": x_reg = 0b0101 // or /5
-	case "si": x_reg = 0b0110
-	case "di": x_reg = 0b0111
+	case "ax":
+		x_reg = 0b0000
+	case "cx":
+		x_reg = 0b0001
+	case "dx":
+		x_reg = 0b0010
+	case "bx":
+		x_reg = 0b0011
+	case "sp":
+		x_reg = 0b0100
+	case "bp":
+		x_reg = 0b0101 // or /5
+	case "si":
+		x_reg = 0b0110
+	case "di":
+		x_reg = 0b0111
 	default:
 		panic("TBI: unexpected register " + reg)
 	}
@@ -83,9 +90,8 @@ const SibBaseRSP uint8 = 0b100
 //  | scale |   index   |    base   |
 //  +---+---+---+---+---+---+---+---+
 func composeSIB(scale byte, index byte, base byte) byte {
-	return scale* 32 + index* 8 + base
+	return scale*32 + index*8 + base
 }
-
 
 type Instruction struct {
 	startAddr uintptr
@@ -97,8 +103,8 @@ func encode(s *statement) *Instruction {
 	//debugf("stmt=%#v\n", s)
 	var r []byte
 	var instr = &Instruction{
-		startAddr:   currentTextAddr,
-		raw:         s,
+		startAddr: currentTextAddr,
+		raw:       s,
 	}
 	if s.labelSymbol != "" {
 		allSymbols[s.labelSymbol].address = currentTextAddr
@@ -121,8 +127,8 @@ func encode(s *statement) *Instruction {
 			nextInstrAddr: currentTextAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
-	case "callq","call":
-		r =  []byte{0xe8, 0, 0, 0, 0}
+	case "callq", "call":
+		r = []byte{0xe8, 0, 0, 0, 0}
 		target_symbol := s.operands[0].ifc.(*symbolExpr).name
 		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
 			nextInstrAddr: currentTextAddr + uintptr(len(r)),
@@ -185,7 +191,7 @@ func encode(s *statement) *Instruction {
 			var num int32 = int32(intNum)
 			bytesNum := (*[4]byte)(unsafe.Pointer(&num))
 			var opcode uint8 = 0xc7
-			var modRM uint8 = 0b11000000+ op2.ifc.(*register).toBits()
+			var modRM uint8 = 0b11000000 + op2.ifc.(*register).toBits()
 			r = []byte{REX_W, opcode, modRM}
 			r = append(r, bytesNum[:]...)
 		case *register:
@@ -195,9 +201,9 @@ func encode(s *statement) *Instruction {
 				mod := ModRegi
 				reg := op1.toBits() // src
 				op2Regi := op2.ifc.(*register)
-				rm :=  op2Regi.toBits()  // dst
+				rm := op2Regi.toBits() // dst
 				modRM := composeModRM(mod, reg, rm)
-				r = []byte{REX_W,opcode,modRM}
+				r = []byte{REX_W, opcode, modRM}
 			case *indirection:
 				if op2dtype.isRipRelative() {
 					switch expr := op2dtype.expr.(type) {
@@ -205,10 +211,10 @@ func encode(s *statement) *Instruction {
 						// REX.W 89 /r (MOV r/m64 r64, MR)
 						// "movq %rbx, runtime.__argv__+8(%rip)"
 						mod := ModIndirectionWithNoDisplacement
-						reg := op1.toBits() // src
+						reg := op1.toBits()  // src
 						rm := RM_SPECIAL_101 // RIP
 						modRM := composeModRM(mod, reg, rm)
-						r = []byte{REX_W,opcode,modRM}
+						r = []byte{REX_W, opcode, modRM}
 
 						symbol := expr.left.(*symbolExpr).name
 
@@ -218,7 +224,7 @@ func encode(s *statement) *Instruction {
 							uses: symbol,
 						}
 
-						r = append(r,  0,0,0,0)
+						r = append(r, 0, 0, 0, 0)
 
 						relaTextUsers = append(relaTextUsers, ru)
 					default:
@@ -259,10 +265,10 @@ func encode(s *statement) *Instruction {
 					uses: symbol,
 				}
 
-				r = append(r,  0,0,0,0)
+				r = append(r, 0, 0, 0, 0)
 
 				relaTextUsers = append(relaTextUsers, ru)
-			} else if op1regi.name  == "rsp" {
+			} else if op1regi.name == "rsp" {
 				var opcode uint8 = 0x8b
 				var mod uint8 = 0b000 // indirection
 				var rm = regBits("sp")
@@ -285,7 +291,7 @@ func encode(s *statement) *Instruction {
 		_, op2 := s.operands[0], s.operands[1]
 		var opcode uint8 = 0x01
 		regFieldN := op2.ifc.(*register).toBits()
-		var modRM uint8 = 0b11000000+ regFieldN
+		var modRM uint8 = 0b11000000 + regFieldN
 		r = []byte{opcode, modRM}
 	case "addq":
 		r = []byte{REX_W, 0x01, 0xc7} // REX.W, ADD, ModR/M
@@ -297,7 +303,7 @@ func encode(s *statement) *Instruction {
 		const reg5 = 5
 		modRM := composeModRM(ModRegi, reg5, rm)
 		imm := op1.ifc.(*immediate)
-		imValue, err := strconv.ParseInt(imm.expr,0,8)
+		imValue, err := strconv.ParseInt(imm.expr, 0, 8)
 		if err != nil {
 			panic(err)
 		}
@@ -310,7 +316,7 @@ func encode(s *statement) *Instruction {
 		reg := op2.ifc.(*register).toBits()
 		modRM := composeModRM(0b11, reg, 0)
 		imm := op1.ifc.(*immediate)
-		imValue, err := strconv.ParseInt(imm.expr,0,8)
+		imValue, err := strconv.ParseInt(imm.expr, 0, 8)
 		if err != nil {
 			panic(err)
 		}
@@ -377,7 +383,7 @@ func encodeData(s *statement) []byte {
 	case "": // label
 		//panic("empty keySymbol:" + s.labelSymbol)
 	default:
-		panic("TBI:"+ s.keySymbol)
+		panic("TBI:" + s.keySymbol)
 	}
 	return nil
 }

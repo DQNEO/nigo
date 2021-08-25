@@ -6,7 +6,6 @@ import (
 	"os"
 )
 
-
 // https://sourceware.org/binutils/docs-2.37/as.html#Symbol-Names
 // Symbol names begin with a letter or with one of ‘._’.
 // Symbol names do not start with a digit.
@@ -16,7 +15,7 @@ func isSymbolBeginning(ch byte) bool {
 }
 
 // On most machines, you can also use $ in symbol names.
-func isSymbolLetter(ch byte) bool{
+func isSymbolLetter(ch byte) bool {
 	return isSymbolBeginning(ch) || '0' <= ch && ch <= '9' || ch == '$'
 }
 
@@ -43,7 +42,7 @@ func skipWhitespaces() {
 }
 
 func skipLineComment() {
-	for  {
+	for {
 		ch := source[idx]
 		if ch == '\n' {
 			return
@@ -91,7 +90,7 @@ func readRegi() string {
 
 func readSymbol(first byte) string {
 	expect(first)
-	var buf []byte  = []byte{first}
+	var buf []byte = []byte{first}
 	for {
 		ch := source[idx]
 		if isSymbolLetter(ch) {
@@ -130,7 +129,7 @@ func parseArith() string {
 	skipWhitespaces()
 	ch := source[idx]
 	switch ch {
-	case '+','-','*','/':
+	case '+', '-', '*', '/':
 		idx++
 		n2 := readNumber()
 		return n + string(ch) + n2
@@ -142,7 +141,7 @@ func parseArith() string {
 func readNumber() string {
 	first := source[idx]
 	idx++
-	var buf []byte  = []byte{first}
+	var buf []byte = []byte{first}
 	for {
 		ch := peekCh()
 		if ('0' <= ch && ch <= '9') || ch == 'x' || ('a' <= ch && ch <= 'f') {
@@ -171,7 +170,7 @@ func parseOperand() *operand {
 			// indirection e.g. 24(%rbp)
 			regi := readParenthRegister()
 			return &operand{
-				ifc : &indirection{
+				ifc: &indirection{
 					expr: &symbolExpr{
 						name: symbol,
 					},
@@ -185,7 +184,7 @@ func parseOperand() *operand {
 			case '(':
 				regi := readParenthRegister()
 				return &operand{
-					ifc : &indirection{
+					ifc: &indirection{
 						expr: &binaryExpr{
 							op:    "+",
 							left:  &symbolExpr{name: symbol},
@@ -200,15 +199,15 @@ func parseOperand() *operand {
 		default:
 			// just a symbol
 			symExpr := &symbolExpr{name: symbol}
-			return  &operand{
+			return &operand{
 				ifc: symExpr,
 			}
 		}
 	case ch == '"':
 		s := readStringLiteral()
 		panic("TBI")
-		return  &operand{
-			ifc:s,
+		return &operand{
+			ifc: s,
 		}
 	case '0' <= ch && ch <= '9' || ch == '-': // "24", "-24(%rbp)"
 		n := parseArith()
@@ -216,7 +215,7 @@ func parseOperand() *operand {
 			// indirection e.g. 24(%rbp)
 			regi := readParenthRegister()
 			return &operand{
-				ifc : &indirection{
+				ifc: &indirection{
 					expr: &numberExpr{val: n},
 					regi: regi,
 				},
@@ -224,14 +223,14 @@ func parseOperand() *operand {
 		} else {
 			// just a number
 			numExpr := &numberExpr{val: n}
-			return  &operand{
+			return &operand{
 				ifc: numExpr,
 			}
 		}
 	case ch == '(':
 		regi := readParenthRegister()
 		return &operand{
-			ifc : &indirection{
+			ifc: &indirection{
 				regi: regi,
 			},
 		}
@@ -240,12 +239,12 @@ func parseOperand() *operand {
 		expect('$')
 		// "$123" "$-7", "$ 2 * 3"
 		e := parseArith()
-		return  &operand{
-			ifc : &immediate{expr: e},
+		return &operand{
+			ifc: &immediate{expr: e},
 		}
 	case ch == '%':
 		regName := readRegi()
-		return  &operand{
+		return &operand{
 			ifc: &register{
 				name: regName,
 			},
@@ -263,7 +262,7 @@ func parseOperands(keySymbol string) []*operand {
 	//	// instruction
 	//}
 	var operands []*operand
-	for ; !atEOL();{
+	for !atEOL() {
 		op := parseOperand()
 		operands = append(operands, op)
 		skipWhitespaces()
@@ -334,11 +333,11 @@ type symbolExpr struct {
 	name string
 }
 
-type expr interface {}
+type expr interface{}
 
 type binaryExpr struct {
-	op string /// "+" or "-"
-	left expr
+	op    string /// "+" or "-"
+	left  expr
 	right expr
 }
 
@@ -346,9 +345,8 @@ type operand struct {
 	ifc operandIfc
 }
 
-
 type statement struct {
-	raw []byte
+	raw         []byte
 	labelSymbol string
 	keySymbol   string
 	operands    []*operand
@@ -377,7 +375,7 @@ func consumeEOL() {
 	if idx == len(source) {
 		return
 	}
-	parserAssert(source[idx] == '\n', "not newline, but got " + string(source[idx]))
+	parserAssert(source[idx] == '\n', "not newline, but got "+string(source[idx]))
 	idx++
 	lineno++
 }
@@ -461,7 +459,7 @@ func parse() []*statement {
 		idxBegin := idx
 		s := parseStmt()
 		idxEnd := idx
-		s.raw = source[idxBegin:idxEnd-1]
+		s.raw = source[idxBegin : idxEnd-1]
 		stmts = append(stmts, s)
 		i++
 	}
@@ -501,7 +499,6 @@ func debugParser() {
 	}
 	stmts := parse()
 
-
 	dumpStmts(stmts)
 	return
 
@@ -530,4 +527,3 @@ func debugParser() {
 		fmt.Printf("%v\n", k)
 	}
 }
-
