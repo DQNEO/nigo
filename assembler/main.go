@@ -367,13 +367,18 @@ func buildSymbolTable(hasRelaData bool) {
 			st_value: sym.address,
 		}
 		symbolTable = append(symbolTable, e)
+		debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, sym.name)
 	}
+
 
 	for _, entry := range symbolTable {
 		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
 		s_symtab.contents = append(s_symtab.contents, buf...)
 	}
 }
+
+var debugSymbolTable bool = true
+
 
 type relaDataUser struct {
 	addr uintptr
@@ -421,7 +426,7 @@ func dumpCode(code []byte) string {
 	return strings.Join(r, " ")
 }
 
-var debugEncoder bool = true
+var debugEncoder bool = false
 
 func assembleCode(ss []*statement) []byte {
 	var code []byte
