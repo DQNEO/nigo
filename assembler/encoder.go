@@ -107,7 +107,7 @@ func encode(s *statement) *Instruction {
 		raw:       s,
 	}
 	if s.labelSymbol != "" {
-		allSymbols[s.labelSymbol].address = currentTextAddr
+		definedSymbols[s.labelSymbol].address = currentTextAddr
 	}
 
 	if s.labelSymbol != "" && s.keySymbol == "" {
@@ -391,7 +391,7 @@ func encode(s *statement) *Instruction {
 
 func encodeData(s *statement) []byte {
 	if s.labelSymbol != "" {
-		allSymbols[s.labelSymbol].address = currentDataAddr
+		definedSymbols[s.labelSymbol].address = currentDataAddr
 	}
 
 	switch s.keySymbol {

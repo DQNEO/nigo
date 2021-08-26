@@ -6,6 +6,18 @@ import (
 	"os"
 )
 
+// parser's global vars
+var symbolsInLexicalOrder []string
+var symbolsAppeared = make(map[string]bool)
+
+func collectAppearedSymbols(symbol string) {
+	if !symbolsAppeared[symbol] {
+		symbolsInLexicalOrder = append(symbolsInLexicalOrder, symbol)
+		symbolsAppeared[symbol] = true
+	}
+}
+
+
 // https://sourceware.org/binutils/docs-2.37/as.html#Symbol-Names
 // Symbol names begin with a letter or with one of ‘._’.
 // Symbol names do not start with a digit.
@@ -97,7 +109,8 @@ func readSymbol(first byte) string {
 			buf = append(buf, ch)
 			idx++
 		} else {
-			return string(buf)
+			sym := string(buf)
+			return sym
 		}
 	}
 }
@@ -187,6 +200,7 @@ func parseOperand() *operand {
 	switch {
 	case isSymbolBeginning(ch):
 		symbol := readSymbol(ch)
+		collectAppearedSymbols(symbol)
 		switch source[idx] {
 		case '(':
 			// indirection e.g. 24(%rbp)
@@ -399,6 +413,7 @@ func consumeEOL() {
 	lineno++
 }
 
+
 // https://sourceware.org/binutils/docs-2.37/as.html#Statements
 //
 // A statement ends at a newline character (‘\n’) or a line separator character.
@@ -437,6 +452,7 @@ func parseStmt() *statement {
 	if source[idx] == ':' {
 		// this symbol is a label
 		stmt.labelSymbol = symbol
+		collectAppearedSymbols(symbol)
 		skipWhitespaces()
 		if atEOL() {
 			consumeEOL()

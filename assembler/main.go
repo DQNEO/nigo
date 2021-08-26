@@ -8,7 +8,11 @@ import (
 	"unsafe"
 )
 
+var debug bool = true
 func debugf(s string, a ...interface{}) {
+	if !debug {
+		return
+	}
 	fmt.Fprintf(os.Stderr, s, a...)
 }
 
@@ -297,8 +301,7 @@ type symbolStruct struct {
 var textStmts []*statement
 var dataStmts []*statement
 
-var allSymbols = make(map[string]*symbolStruct)
-var orderedSymbolNames []string
+var definedSymbols = make(map[string]*symbolStruct)
 var globalSymbols = make(map[string]bool)
 
 const STT_SECTION = 0x03
@@ -316,42 +319,64 @@ func buildSymbolTable(hasRelaData bool) {
 		})
 		index++
 	}
-	var orderedNonGlobalSymbols []string
-	var ordererGlobalSymbols []string
-	//debugf("globalSymbols=%v\n", globalSymbols)
-	for _, sym := range orderedSymbolNames {
-		if globalSymbols[sym] {
-			ordererGlobalSymbols = append(ordererGlobalSymbols, sym)
+	debugf("symbolsInLexicalOrder[%d]=%v\n", len(symbolsInLexicalOrder), symbolsInLexicalOrder)
+	debugf("globalSymbols=%v\n", globalSymbols)
+
+	var localSymbols []string
+	var globalDefinedSymbols []string
+	var globalUndefinedSymbols []string
+	for _, sym := range symbolsInLexicalOrder {
+		isGlobal := globalSymbols[sym]
+		_, isDefined := definedSymbols[sym]
+		if !isDefined {
+			isGlobal = true
+		}
+
+		if !isGlobal {
+			localSymbols = append(localSymbols, sym)
 		} else {
-			orderedNonGlobalSymbols = append(orderedNonGlobalSymbols, sym)
+			if isDefined {
+				globalDefinedSymbols = append(globalDefinedSymbols, sym)
+			} else {
+				globalUndefinedSymbols = append(globalUndefinedSymbols, sym)
+			}
 		}
 	}
-	orderedAllsymbols := append(orderedNonGlobalSymbols, ordererGlobalSymbols...)
-	//debugf("orderedAllsymbols=%v\n", orderedAllsymbols)
-	s_strtab.contents = makeStrTab(orderedAllsymbols)
 
-	for _, symname := range orderedAllsymbols {
-		sym, ok := allSymbols[symname]
-		if !ok {
-			//debugf("symbol not found :" + symname)
-			continue
-		}
-		index++
+	// local => global defined => global undefined
+	allSymbolsForElf := append(localSymbols,globalDefinedSymbols...)
+	allSymbolsForElf = append(allSymbolsForElf, globalUndefinedSymbols...)
+
+	//debugf("allSymbolsForElf=%v\n", allSymbolsForElf)
+	s_strtab.contents = makeStrTab(allSymbolsForElf)
+	//panic(len(allSymbolsForElf))
+	for _, symname := range allSymbolsForElf {
+		isGlobal := globalSymbols[symname]
+		sym, isDefined := definedSymbols[symname]
+		var addr uintptr
 		var shndx int
-		switch sym.section {
-		case ".text":
-			shndx = s_text.shndx
-		case ".data":
-			shndx = s_data.shndx
-		default:
-			panic("TBI")
+		if isDefined {
+			addr = sym.address
+			switch sym.section {
+			case ".text":
+				shndx = s_text.shndx
+			case ".data":
+				shndx = s_data.shndx
+			default:
+				panic("TBI")
+			}
+		} else {
+			debugf("undefined symbol  %s\n" , symname)
+			isGlobal = true
 		}
-		name_offset := bytes.Index(s_strtab.contents, []byte(sym.name))
+
+		index++
+		name_offset := bytes.Index(s_strtab.contents, []byte(symname))
 		if name_offset < 0 {
 			panic("name_offset should not be negative")
 		}
 		var st_info uint8
-		if globalSymbols[sym.name] {
+		if isGlobal {
 			st_info = 0x10 // GLOBAL ?
 			if indexOfFirstNonLocalSymbol == 0 {
 				indexOfFirstNonLocalSymbol = index
@@ -364,10 +389,10 @@ func buildSymbolTable(hasRelaData bool) {
 			st_info:  st_info,
 			st_other: 0,
 			st_shndx: uint16(shndx),
-			st_value: sym.address,
+			st_value: addr,
 		}
 		symbolTable = append(symbolTable, e)
-		debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, sym.name)
+		debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, symname)
 	}
 
 
@@ -446,7 +471,7 @@ func assembleCode(ss []*statement) []byte {
 
 	//debugf("iterating unresolvedCodeSymbols...\n")
 	for codeAddr, replaceInfo := range unresolvedCodeSymbols {
-		sym, ok := allSymbols[replaceInfo.symbolUsed]
+		sym, ok := definedSymbols[replaceInfo.symbolUsed]
 		if !ok {
 			//debugf("  symbol not found: %s\n" , replaceInfo.symbolUsed)
 		} else {
@@ -485,6 +510,7 @@ func dumpProgram() {
 	}
 }
 
+
 func main() {
 	//debugParser()
 	var err error
@@ -496,18 +522,11 @@ func main() {
 	stmts := parse()
 	//dumpStmts(stmts)
 
-	var seenSymbols = make(map[string]bool)
 	var currentSection string
 	currentSection = ".text"
 	for _, s := range stmts {
 		if s == emptyStatement {
 			continue
-		}
-		if s.labelSymbol != "" {
-			if !seenSymbols[s.labelSymbol] {
-				orderedSymbolNames = append(orderedSymbolNames, s.labelSymbol)
-				seenSymbols[s.labelSymbol] = true
-			}
 		}
 		switch s.keySymbol {
 		case ".data":
@@ -520,30 +539,18 @@ func main() {
 			globalSymbols[s.operands[0].ifc.(*symbolExpr).name] = true
 		}
 
+		if s.labelSymbol != "" {
+			definedSymbols[s.labelSymbol] = &symbolStruct{
+				name:    s.labelSymbol,
+				section: currentSection,
+			}
+		}
+
 		switch currentSection {
 		case ".data":
 			dataStmts = append(dataStmts, s)
-			if s.labelSymbol != "" {
-				allSymbols[s.labelSymbol] = &symbolStruct{
-					name:    s.labelSymbol,
-					section: ".data",
-				}
-			}
 		case ".text":
 			textStmts = append(textStmts, s)
-			if s.keySymbol == "call" || s.keySymbol == "callq" {
-				sym := s.operands[0].ifc.(*symbolExpr).name
-				if !seenSymbols[sym] {
-					orderedSymbolNames = append(orderedSymbolNames, sym)
-					seenSymbols[sym] = true
-				}
-			}
-			if s.labelSymbol != "" {
-				allSymbols[s.labelSymbol] = &symbolStruct{
-					name:    s.labelSymbol,
-					section: ".text",
-				}
-			}
 		default:
 		}
 
@@ -560,16 +567,16 @@ func main() {
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 	hasRelaText := len(relaTextUsers) > 0
 	hasRelaData := len(relaDataUsers) > 0
-	hasSymbols := len(allSymbols) > 0
+	hasSymbols := len(definedSymbols) > 0
 	sectionHeaders := prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols)
-	if len(allSymbols) > 0 {
+	if len(definedSymbols) > 0 {
 		buildSymbolTable(hasRelaData)
 	}
 
 	// build rela_data contents
 	var rela_data_c []byte
 	for _, ru := range relaDataUsers {
-		sym, ok := allSymbols[ru.uses]
+		sym, ok := definedSymbols[ru.uses]
 		if !ok {
 			panic("label not found")
 		}
@@ -597,7 +604,7 @@ func main() {
 
 		for _, ru := range relaTextUsers {
 			//debugf("re.uses:%s\n", ru.uses)
-			sym, ok := allSymbols[ru.uses]
+			sym, ok := definedSymbols[ru.uses]
 			if !ok {
 				//	debugf("symbol not found:" + ru.uses)
 				continue
