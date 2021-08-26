@@ -2,3 +2,5 @@
 /*.o
 /*.xxd
 /*.readelf
+/*.hexdump
+/*.objdump
