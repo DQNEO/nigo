@@ -313,6 +313,7 @@ var debugSymbolTable bool = true
 func buildSymbolTable(hasRelaData bool) {
 	var index int
 	if hasRelaData {
+		index++
 		symbolTable = append(symbolTable, &ElfSym{
 			st_name:  0,
 			st_info:  STT_SECTION,
@@ -321,7 +322,8 @@ func buildSymbolTable(hasRelaData bool) {
 			st_value: 0,
 			st_size:  0,
 		})
-		index++
+		symbolIndex[".data"] = index
+
 	}
 	debugf("symbolsInLexicalOrder[%d]=%v\n", len(symbolsInLexicalOrder), symbolsInLexicalOrder)
 	debugf("globalSymbols=%v\n", globalSymbols)
@@ -633,12 +635,11 @@ func main() {
 
 			var symIdx int
 			if defined && sym.section == ".data" {
-				symIdx = 1 // @TODO Is this always 1 ?
+				symIdx = symbolIndex[".data"]
 			} else {
 				symIdx = symbolIndex[ru.uses]
 			}
 
-			//symIdx = 1
 			rla := &ElfRela{
 				r_offset: ru.addr, // 8 bytes
 				r_info:   uint64(symIdx) * 256 * 256 * 256 * 256 + typ, // 8 bytes
