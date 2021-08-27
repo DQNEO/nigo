@@ -6,10 +6,11 @@ import (
 )
 
 // ELF format
-// see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
+// Spec: https://refspecs.linuxfoundation.org/elf/elf.pdf
+//
 // see https://man7.org/linux/man-pages/man5/elf.5.html
 // see https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h;h=4738dfa28f6549fc11654996a15659dc8007e686;hb=HEAD
-
+// see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_layout
 type ElfFile struct {
 	header         *Elf64_Ehdr
 	sections       []*ElfSectionBodies

@@ -121,17 +121,28 @@ func encode(s *statement) *Instruction {
 		r = []byte{0x90}
 	case "jmp":
 		// EB cb
-		r = []byte{0xeb, 0}
 		target_symbol := s.operands[0].ifc.(*symbolExpr).name
+		r = []byte{0xeb}
+		r = append(r, 0)
 		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
 			nextInstrAddr: currentTextAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
 	case "callq", "call":
-		r = []byte{0xe8, 0, 0, 0, 0}
 		target_symbol := s.operands[0].ifc.(*symbolExpr).name
+
+		r = []byte{0xe8}
+		ru := &relaTextUser{
+			addr: currentTextAddr + uintptr(len(r)) ,
+			uses: target_symbol,
+			toJump: true,
+		}
+		relaTextUsers = append(relaTextUsers, ru)
+
+		r = append(r,  0, 0, 0, 0)
+
 		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
-			nextInstrAddr: currentTextAddr + uintptr(len(r)),
+			nextInstrAddr: currentTextAddr + uintptr(len(r) ),
 			symbolUsed:    target_symbol,
 		}
 	case "leaq":
@@ -217,16 +228,17 @@ func encode(s *statement) *Instruction {
 						r = []byte{REX_W, opcode, modRM}
 
 						symbol := expr.left.(*symbolExpr).name
-
-						// @TODO shouud use expr.right.(*numberExpr).val as an offset
-						ru := &relaTextUser{
-							addr: currentTextAddr + uintptr(len(r)),
-							uses: symbol,
+						if _, defined := definedSymbols[symbol]; !defined {
+							// @TODO shouud use expr.right.(*numberExpr).val as an offset
+							ru := &relaTextUser{
+								addr: currentTextAddr + uintptr(len(r)),
+								uses: symbol,
+								adjust: int64(evalNumExpr(expr.right)),
+							}
+							relaTextUsers = append(relaTextUsers, ru)
 						}
-
 						r = append(r, 0, 0, 0, 0)
 
-						relaTextUsers = append(relaTextUsers, ru)
 					default:
 						panic("TBI:" + string(s.raw))
 					}

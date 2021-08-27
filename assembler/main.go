@@ -78,6 +78,7 @@ func prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 	for i, s := range r {
 		s.shndx = i
 	}
+	s_rela_text.header.sh_link = uint32(s_symtab.shndx)
 	return r
 }
 
@@ -104,7 +105,7 @@ var s_rela_text = &section{
 	header: &ElfSectionHeader{
 		sh_type:      0x04, // SHT_RELA
 		sh_flags:     0x40, // * ??
-		sh_link:      0x06,
+		sh_link:      0x00, // The section header index of the associated symbol table
 		sh_info:      0x01,
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
@@ -226,6 +227,7 @@ func calcOffsetOfSection(s *section, prev *section) {
 	}
 	s.header.sh_offset = tentative_offset + s.numZeroPad
 	s.header.sh_size = uintptr(len(s.contents))
+	debugf("size of section %s is %x\n", s.sh_name,s.header.sh_size)
 }
 
 func makeStrTab(symbols []string) []byte {
@@ -306,6 +308,8 @@ var globalSymbols = make(map[string]bool)
 
 const STT_SECTION = 0x03
 
+var debugSymbolTable bool = true
+
 func buildSymbolTable(hasRelaData bool) {
 	var index int
 	if hasRelaData {
@@ -350,6 +354,7 @@ func buildSymbolTable(hasRelaData bool) {
 	//debugf("allSymbolsForElf=%v\n", allSymbolsForElf)
 	s_strtab.contents = makeStrTab(allSymbolsForElf)
 	//panic(len(allSymbolsForElf))
+
 	for _, symname := range allSymbolsForElf {
 		isGlobal := globalSymbols[symname]
 		sym, isDefined := definedSymbols[symname]
@@ -392,7 +397,8 @@ func buildSymbolTable(hasRelaData bool) {
 			st_value: addr,
 		}
 		symbolTable = append(symbolTable, e)
-		debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, symname)
+		symbolIndex[symname] = index
+		//debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, symname)
 	}
 
 
@@ -402,8 +408,7 @@ func buildSymbolTable(hasRelaData bool) {
 	}
 }
 
-var debugSymbolTable bool = true
-
+var symbolIndex  = make(map[string]int)
 
 type relaDataUser struct {
 	addr uintptr
@@ -421,7 +426,9 @@ var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
 type relaTextUser struct {
 	addr uintptr
+	toJump bool
 	uses string
+	adjust int64
 }
 
 var relaTextUsers []*relaTextUser
@@ -476,7 +483,7 @@ func assembleCode(ss []*statement) []byte {
 			//debugf("  symbol not found: %s\n" , replaceInfo.symbolUsed)
 		} else {
 			//debugf("  found symbol:%v\n", sym.name)
-			diff := sym.address - replaceInfo.nextInstrAddr
+			diff := sym.address  - replaceInfo.nextInstrAddr
 			if diff > 255 {
 				panic("diff is too large")
 			}
@@ -566,6 +573,7 @@ func main() {
 
 	//fmt.Printf("symbols=%+v\n",p.symStruct)
 	hasRelaText := len(relaTextUsers) > 0
+	//panic(hasRelaText)
 	hasRelaData := len(relaDataUsers) > 0
 	hasSymbols := len(definedSymbols) > 0
 	sectionHeaders := prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols)
@@ -603,19 +611,41 @@ func main() {
 		var rela_text_c []byte
 
 		for _, ru := range relaTextUsers {
-			//debugf("re.uses:%s\n", ru.uses)
-			sym, ok := definedSymbols[ru.uses]
-			if !ok {
+			sym, defined := definedSymbols[ru.uses]
+			var addr int64
+			if defined {
+				if sym.section == ".text" {
+					// skip symbols that belong to the same section
+					continue
+				}
 				//	debugf("symbol not found:" + ru.uses)
-				continue
+				addr = int64(sym.address)
 			}
 
+			const R_X86_64_PC32 = 2
+			const R_X86_64_PLT32 = 4
+			var typ uint64
+			if ru.toJump {
+				typ = R_X86_64_PLT32
+			} else {
+				typ = R_X86_64_PC32
+			}
+
+			var symIdx int
+			if defined && sym.section == ".data" {
+				symIdx = 1 // @TODO Is this always 1 ?
+			} else {
+				symIdx = symbolIndex[ru.uses]
+			}
+
+			//symIdx = 1
 			rla := &ElfRela{
-				r_offset: ru.addr,
-				r_info:   0x0100000002,
-				r_addend: int64(sym.address) - 4, // -4 ????
+				r_offset: ru.addr, // 8 bytes
+				r_info:   uint64(symIdx) * 256 * 256 * 256 * 256 + typ, // 8 bytes
+				r_addend: addr + ru.adjust -4, // 8 bytes
 			}
 			p := (*[24]byte)(unsafe.Pointer(rla))[:]
+			debugf("[rela.text] r_offset:%x, r_info=%x, r_addend=%x    (%s)\n", rla.r_offset, rla.r_info, rla.r_addend, ru.uses)
 			rela_text_c = append(rela_text_c, p...)
 		}
 		s_rela_text.contents = rela_text_c
