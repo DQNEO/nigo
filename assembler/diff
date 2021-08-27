@@ -3,8 +3,8 @@ basename=$1
 my=${basename}.my.o
 gnu=${basename}.gnu.o
 
-diff -u --color <(./readelf $my) <(./readelf $gnu)
-diff -u --color <(xxd -g 1 -s 64 -o -64 $my) <(xxd -g 1 -s 64 -o -64 $gnu) | head -n 20
+diff -u --color <(xxd -g 1 $my) <(xxd -g 1 $gnu) | head -n 20
+#diff -u --color <(./readelf $my) <(./readelf $gnu)
 
 
 

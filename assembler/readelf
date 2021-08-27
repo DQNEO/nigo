@@ -5,6 +5,7 @@ file=$1
 readelf -W --hex-dump=.text $file
 readelf -W --hex-dump=.data $file
 readelf -W --relocs $file
+readelf -W --hex-dump=.rela.text $file
 readelf -W --hex-dump=.rela.data $file
 readelf -W --symbols $file
 readelf -W --hex-dump=.symtab $file
