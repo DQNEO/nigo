@@ -299,9 +299,6 @@ type symbolStruct struct {
 	address uintptr
 }
 
-var textStmts []*statement
-var dataStmts []*statement
-
 var definedSymbols = make(map[string]*symbolStruct)
 var globalSymbols = make(map[string]bool)
 
@@ -509,6 +506,9 @@ func main() {
 
 	stmts := parse()
 	//dumpStmts(stmts)
+
+	var textStmts []*statement
+	var dataStmts []*statement
 
 	var currentSection = ".text"
 	for _, s := range stmts {
