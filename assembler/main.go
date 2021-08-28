@@ -159,7 +159,14 @@ var s_bss = &section{
 //  SHT_SYMTAB (symbol table)
 var s_symtab = &section{
 	sh_name:  ".symtab",
-	header:   sh_symtab,
+	header: &ElfSectionHeader{
+		sh_type:  0x02, // SHT_SYMTAB
+		sh_flags: 0,
+		sh_addr:  0,
+		//	sh_link:      0x05, // section index of .strtab ?
+		sh_addralign: 0x08,
+		sh_entsize:   0x18,
+	},
 	contents: nil,
 }
 
@@ -202,16 +209,6 @@ var s_strtab = &section{
 // The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
 
 var indexOfFirstNonLocalSymbol int
-
-// ".symtab"
-var sh_symtab = &ElfSectionHeader{
-	sh_type:  0x02, // SHT_SYMTAB
-	sh_flags: 0,
-	sh_addr:  0,
-	//	sh_link:      0x05, // section index of .strtab ?
-	sh_addralign: 0x08,
-	sh_entsize:   0x18,
-}
 
 func calcOffsetOfSection(s *section, prev *section) {
 	tentative_offset := prev.header.sh_offset + prev.header.sh_size
@@ -594,7 +591,7 @@ func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataU
 	s_rela_data.contents = rela_data_c
 
 	s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
-	sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
+	s_symtab.header.sh_info = uint32(indexOfFirstNonLocalSymbol)
 	if len(relaDataUsers) > 0 {
 		s_rela_data.header.sh_link = uint32(s_symtab.shndx)
 		s_rela_data.header.sh_info = uint32(s_data.shndx)
