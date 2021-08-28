@@ -8,7 +8,8 @@ import (
 	"unsafe"
 )
 
-var debug bool = true
+var debug bool = false
+
 func debugf(s string, a ...interface{}) {
 	if !debug {
 		return
@@ -53,7 +54,7 @@ var symbolTable = []*ElfSym{
 	&ElfSym{}, // NULL entry
 }
 
-func prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols bool) []*section {
+func prepareSectionHeaderEntries(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 
 	r := []*section{
 		s_null, // NULL
@@ -452,7 +453,7 @@ var addresses = map[string]uintptr{
 */
 var currentTextAddr uintptr
 
-func dumpCode(code []byte) string {
+func dumpText(code []byte) string {
 	var r []string = make([]string, len(code))
 	for i, b := range code {
 		r[i] = fmt.Sprintf("%02x", b)
@@ -462,20 +463,20 @@ func dumpCode(code []byte) string {
 
 var debugEncoder bool = false
 
-func assembleCode(ss []*statement) []byte {
-	var code []byte
+func encodeAllText(ss []*statement) []byte {
+	var allText []byte
 	for _, s := range ss {
 		if s.labelSymbol == "" && s.keySymbol == "" {
 			continue
 		}
-		codeAddr := currentTextAddr
+		textAddr := currentTextAddr
 		instr := encode(s)
 		buf := instr.code
 		currentTextAddr += uintptr(len(buf))
 		if debugEncoder {
-			debugf("[encoder] %04x : %s\t=>\t%s\n", codeAddr, s.raw, dumpCode(buf))
+			debugf("[encoder] %04x : %s\t=>\t%s\n", textAddr, s.raw, dumpText(buf))
 		}
-		code = append(code, buf...)
+		allText = append(allText, buf...)
 	}
 
 	//debugf("iterating unresolvedCodeSymbols...\n")
@@ -491,34 +492,23 @@ func assembleCode(ss []*statement) []byte {
 			}
 			//debugf("  patching symol addr into code : %s=%02x => %02x (%02x - %02x)\n",
 			//	sym.name, codeAddr, diff, sym.address , replaceInfo.nextInstrAddr)
-			code[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
+			allText[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
 		}
 	}
-	return code
+	return allText
 }
 
 var currentDataAddr uintptr
 
-func assembleData(ss []*statement) []byte {
-	var data []byte
+func encodeAllData(ss []*statement) []byte {
+	var allData []byte
 	for _, s := range ss {
 		buf := encodeData(s)
 		currentDataAddr += uintptr(len(buf))
-		data = append(data, buf...)
+		allData = append(allData, buf...)
 	}
-	return data
+	return allData
 }
-
-func dumpProgram() {
-	fmt.Printf("%4s|%29s: |%30s | %s\n", "Line", "Label", "Instruction", "Operands")
-	for _, stmt := range dataStmts {
-		dumpStmt(0, stmt)
-	}
-	for _, stmt := range textStmts {
-		dumpStmt(0, stmt)
-	}
-}
-
 
 func main() {
 	//debugParser()
@@ -531,8 +521,7 @@ func main() {
 	stmts := parse()
 	//dumpStmts(stmts)
 
-	var currentSection string
-	currentSection = ".text"
+	var currentSection = ".text"
 	for _, s := range stmts {
 		if s == emptyStatement {
 			continue
@@ -565,10 +554,9 @@ func main() {
 
 	}
 
-	//dumpProgram(p)
-	code := assembleCode(textStmts)
-	//dumpCode(code)
-	data := assembleData(dataStmts)
+	code := encodeAllText(textStmts)
+	//dumpText(code)
+	data := encodeAllData(dataStmts)
 	//debugf("mapDataLabelAddr=%v\n", mapDataLabelAddr)
 	s_data.contents = data
 	s_text.contents = code
@@ -578,12 +566,27 @@ func main() {
 	//panic(hasRelaText)
 	hasRelaData := len(relaDataUsers) > 0
 	hasSymbols := len(definedSymbols) > 0
-	sectionHeaders := prepareSHTEntries(hasRelaText, hasRelaData, hasSymbols)
+	sectionHeaders := prepareSectionHeaderEntries(hasRelaText, hasRelaData, hasSymbols)
 	if len(definedSymbols) > 0 {
 		buildSymbolTable(hasRelaData)
 	}
 
-	// build rela_data contents
+	buildRelaSections()
+
+	sectionNames := makeSectionNames(hasRelaText, hasRelaData, hasSymbols)
+	makeShStrTab(sectionNames)
+
+	sectionBodies := buildSectionBodies(hasRelaText, hasRelaData, hasSymbols)
+	resolveShNames(sectionBodies)
+
+	// prepare ELF File format
+	elfFile := prepareElfFile(sectionBodies, sectionHeaders)
+	elfFile.writeTo(os.Stdout)
+}
+
+// build rela text and data contents and headers
+func buildRelaSections() {
+
 	var rela_data_c []byte
 	for _, ru := range relaDataUsers {
 		sym, ok := definedSymbols[ru.uses]
@@ -608,7 +611,6 @@ func main() {
 		s_rela_data.header.sh_info = uint32(s_data.shndx)
 	}
 
-	// build rela_text contents
 	if len(relaTextUsers) > 0 {
 		var rela_text_c []byte
 
@@ -658,16 +660,6 @@ func main() {
 		//			s_rela_data.header.sh_info = uint32(s_data.shndx)
 		//		}
 	}
-
-	sectionNames := makeSectionNames(hasRelaText, hasRelaData, hasSymbols)
-	makeShStrTab(sectionNames)
-
-	sectionBodies := buildSectionBodies(hasRelaText, hasRelaData, hasSymbols)
-	resolveShNames(sectionBodies)
-
-	// prepare ELF File format
-	elfFile := prepareElfFile(sectionBodies, sectionHeaders)
-	elfFile.writeTo(os.Stdout)
 }
 
 func determineSectionOffsets(sectionBodies []*section) {
