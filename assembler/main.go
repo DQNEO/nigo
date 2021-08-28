@@ -246,30 +246,29 @@ func makeStrTab(symbols []string) []byte {
 }
 
 func makeSectionNames(hasRelaText, hasRelaData, hasSymbols bool) []string {
-	var sectionNames []string
+	var r []string
 
 	if hasSymbols {
-		sectionNames = append(sectionNames, ".symtab", ".strtab")
+		r = append(r, ".symtab", ".strtab")
 	}
 
-	var dataName string = ".data"
+	var dataName string
+	var textName string
+
 	if hasRelaData {
 		dataName = ".rela.data"
+	} else {
+		dataName = ".data"
 	}
 
-	var textName = ".text"
 	if hasRelaText {
 		textName = ".rela.text"
+	} else {
+		textName = ".text"
 	}
 
-	var names = []string{
-		".shstrtab",
-		textName,
-		dataName,
-		".bss",
-	}
-	sectionNames = append(sectionNames, names...)
-	return sectionNames
+	r = append(r, ".shstrtab", textName, dataName, ".bss")
+	return r
 }
 
 // Make contents of .shstrtab"
