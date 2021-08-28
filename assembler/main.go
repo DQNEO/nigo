@@ -300,13 +300,12 @@ type symbolStruct struct {
 }
 
 var definedSymbols = make(map[string]*symbolStruct)
-var globalSymbols = make(map[string]bool)
 
 const STT_SECTION = 0x03
 
 var debugSymbolTable bool = true
 
-func buildSymbolTable(hasRelaData bool) {
+func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 	var index int
 	if hasRelaData {
 		index++
@@ -510,6 +509,7 @@ func main() {
 	var textStmts []*statement
 	var dataStmts []*statement
 
+	var globalSymbols = make(map[string]bool)
 	var currentSection = ".text"
 	for _, s := range stmts {
 		if s == emptyStatement {
@@ -557,10 +557,10 @@ func main() {
 	hasSymbols := len(definedSymbols) > 0
 	sectionHeaders := prepareSectionHeaderEntries(hasRelaText, hasRelaData, hasSymbols)
 	if len(definedSymbols) > 0 {
-		buildSymbolTable(hasRelaData)
+		buildSymbolTable(hasRelaData, globalSymbols)
 	}
 
-	buildRelaSections()
+	buildRelaSections(relaTextUsers, relaDataUsers)
 
 	sectionNames := makeSectionNames(hasRelaText, hasRelaData, hasSymbols)
 	makeShStrTab(sectionNames)
@@ -574,7 +574,7 @@ func main() {
 }
 
 // build rela text and data contents and headers
-func buildRelaSections() {
+func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataUser) {
 
 	var rela_data_c []byte
 	for _, ru := range relaDataUsers {
