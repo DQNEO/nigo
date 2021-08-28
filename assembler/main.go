@@ -487,13 +487,13 @@ func encodeAllText(ss []*statement) []byte {
 	return allText
 }
 
-var currentDataAddr uintptr
 
 func encodeAllData(ss []*statement) []byte {
+	var dataAddr uintptr
 	var allData []byte
 	for _, s := range ss {
-		buf := encodeData(s)
-		currentDataAddr += uintptr(len(buf))
+		buf := encodeData(s, dataAddr)
+		dataAddr += uintptr(len(buf))
 		allData = append(allData, buf...)
 	}
 	return allData

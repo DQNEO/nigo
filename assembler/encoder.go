@@ -401,9 +401,9 @@ func encode(s *statement, instrAddr uintptr) *Instruction {
 	return instr
 }
 
-func encodeData(s *statement) []byte {
+func encodeData(s *statement, dataAddr uintptr) []byte {
 	if s.labelSymbol != "" {
-		definedSymbols[s.labelSymbol].address = currentDataAddr
+		definedSymbols[s.labelSymbol].address = dataAddr
 	}
 
 	switch s.keySymbol {
@@ -427,7 +427,7 @@ func encodeData(s *statement) []byte {
 			return buf[:]
 		case *symbolExpr:
 			ru := &relaDataUser{
-				addr: currentDataAddr,
+				addr: dataAddr,
 				uses: opDtype.name,
 			}
 			relaDataUsers = append(relaDataUsers, ru)
