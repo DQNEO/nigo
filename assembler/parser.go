@@ -17,7 +17,6 @@ func collectAppearedSymbols(symbol string) {
 	}
 }
 
-
 // https://sourceware.org/binutils/docs-2.37/as.html#Symbol-Names
 // Symbol names begin with a letter or with one of ‘._’.
 // Symbol names do not start with a digit.
@@ -150,6 +149,7 @@ func evalNumExpr(expr expr) int {
 	}
 	panic(fmt.Sprintf("unkonwn type %T", expr))
 }
+
 // binary or unary or primary expr
 func parseArithExpr() expr {
 	n := readNumberLitral()
@@ -173,6 +173,7 @@ func parseArithExpr() expr {
 type numberLit struct {
 	val string
 }
+
 func readNumberLitral() *numberLit {
 	first := source[idx]
 	idx++
@@ -277,7 +278,7 @@ func parseOperand() *operand {
 		e := parseArithExpr()
 		return &operand{
 			ifc: &immediate{
-				expr:  e,
+				expr: e,
 			},
 		}
 	case ch == '%':
@@ -412,7 +413,6 @@ func consumeEOL() {
 	idx++
 	lineno++
 }
-
 
 // https://sourceware.org/binutils/docs-2.37/as.html#Statements
 //

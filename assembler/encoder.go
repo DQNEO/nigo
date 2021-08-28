@@ -133,16 +133,16 @@ func encode(s *statement, instrAddr uintptr) *Instruction {
 
 		r = []byte{0xe8}
 		ru := &relaTextUser{
-			addr:   instrAddr + uintptr(len(r)) ,
+			addr:   instrAddr + uintptr(len(r)),
 			uses:   target_symbol,
 			toJump: true,
 		}
 		relaTextUsers = append(relaTextUsers, ru)
 
-		r = append(r,  0, 0, 0, 0)
+		r = append(r, 0, 0, 0, 0)
 
 		unresolvedCodeSymbols[instrAddr+1] = &addrToReplace{
-			nextInstrAddr: instrAddr + uintptr(len(r) ),
+			nextInstrAddr: instrAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
 	case "leaq":
@@ -282,7 +282,7 @@ func encode(s *statement, instrAddr uintptr) *Instruction {
 				relaTextUsers = append(relaTextUsers, ru)
 			} else if op1regi.name == "rsp" {
 				var opcode uint8 = 0x8b
-				if  op1.expr.(*numberLit).val == "0" {
+				if op1.expr.(*numberLit).val == "0" {
 					var mod uint8 = 0b000 // indirection
 					var rm = regBits("sp")
 					reg := op2regi.toBits()
@@ -372,7 +372,7 @@ func encode(s *statement, instrAddr uintptr) *Instruction {
 			if err != nil {
 				panic(err)
 			}
-			r = []byte{0x6a , uint8(imValue)}
+			r = []byte{0x6a, uint8(imValue)}
 		default:
 			panic("[encoder] TBI:" + string(s.raw))
 		}

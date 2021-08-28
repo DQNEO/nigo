@@ -166,7 +166,7 @@ var s_bss = &section{
 //  ".symtab"
 //  SHT_SYMTAB (symbol table)
 var s_symtab = &section{
-	sh_name:  ".symtab",
+	sh_name: ".symtab",
 	header: &ElfSectionHeader{
 		sh_type:  0x02, // SHT_SYMTAB
 		sh_flags: 0,
@@ -226,7 +226,7 @@ func calcOffsetOfSection(s *section, prev *section) {
 	}
 	s.header.sh_offset = tentative_offset + s.numZeroPad
 	s.header.sh_size = uintptr(len(s.contents))
-	debugf("size of section %s is %x\n", s.sh_name,s.header.sh_size)
+	debugf("size of section %s is %x\n", s.sh_name, s.header.sh_size)
 }
 
 func makeStrTab(symbols []string) []byte {
@@ -343,7 +343,7 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 	}
 
 	// local => global defined => global undefined
-	allSymbolsForElf := append(localSymbols,globalDefinedSymbols...)
+	allSymbolsForElf := append(localSymbols, globalDefinedSymbols...)
 	allSymbolsForElf = append(allSymbolsForElf, globalUndefinedSymbols...)
 
 	//debugf("allSymbolsForElf=%v\n", allSymbolsForElf)
@@ -370,7 +370,7 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 				panic("TBI")
 			}
 		} else {
-			debugf("undefined symbol  %s\n" , symname)
+			debugf("undefined symbol  %s\n", symname)
 			isGlobal = true
 		}
 
@@ -408,7 +408,7 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 	}
 }
 
-var symbolIndex  = make(map[string]int)
+var symbolIndex = make(map[string]int)
 
 type relaDataUser struct {
 	addr uintptr
@@ -425,9 +425,9 @@ type addrToReplace struct {
 var unresolvedCodeSymbols = make(map[uintptr]*addrToReplace)
 
 type relaTextUser struct {
-	addr uintptr
+	addr   uintptr
 	toJump bool
-	uses string
+	uses   string
 	adjust int64
 }
 
@@ -438,7 +438,6 @@ func assert(bol bool, errorMsg string) {
 		panic("assert failed: " + errorMsg)
 	}
 }
-
 
 func dumpText(code []byte) string {
 	var r []string = make([]string, len(code))
@@ -474,7 +473,7 @@ func encodeAllText(ss []*statement) []byte {
 			//debugf("  symbol not found: %s\n" , replaceInfo.symbolUsed)
 		} else {
 			//debugf("  found symbol:%v\n", sym.name)
-			diff := sym.address  - replaceInfo.nextInstrAddr
+			diff := sym.address - replaceInfo.nextInstrAddr
 			if diff > 255 {
 				panic("diff is too large")
 			}
@@ -485,7 +484,6 @@ func encodeAllText(ss []*statement) []byte {
 	}
 	return allText
 }
-
 
 func encodeAllData(ss []*statement) []byte {
 	var dataAddr uintptr
@@ -628,9 +626,9 @@ func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataU
 			}
 
 			rla := &ElfRela{
-				r_offset: ru.addr, // 8 bytes
+				r_offset: ru.addr,                  // 8 bytes
 				r_info:   uint64(symIdx)<<32 + typ, // 8 bytes
-				r_addend: addr + ru.adjust -4, // 8 bytes
+				r_addend: addr + ru.adjust - 4,     // 8 bytes
 			}
 			p := (*[24]byte)(unsafe.Pointer(rla))[:]
 			debugf("[rela.text] r_offset:%x, r_info=%x, r_addend=%x    (%s)\n", rla.r_offset, rla.r_info, rla.r_addend, ru.uses)
