@@ -47,7 +47,7 @@ const ModIndirectionWithDisplacement32 uint8 = 0b10
 const RM_SPECIAL_101 uint8 = 0b101 // none? rip?
 
 func composeModRM(mod byte, reg byte, rm byte) byte {
-	return mod*64 + reg*8 + rm
+	return mod<<6 + reg<<3 + rm
 }
 
 const REG_NONE = 0b101
@@ -90,7 +90,7 @@ const SibBaseRSP uint8 = 0b100
 //  | scale |   index   |    base   |
 //  +---+---+---+---+---+---+---+---+
 func composeSIB(scale byte, index byte, base byte) byte {
-	return scale*32 + index*8 + base
+	return scale<<6 + index<<3 + base
 }
 
 type Instruction struct {

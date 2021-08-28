@@ -629,7 +629,7 @@ func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataU
 
 			rla := &ElfRela{
 				r_offset: ru.addr, // 8 bytes
-				r_info:   uint64(symIdx) * 256 * 256 * 256 * 256 + typ, // 8 bytes
+				r_info:   uint64(symIdx)<<32 + typ, // 8 bytes
 				r_addend: addr + ru.adjust -4, // 8 bytes
 			}
 			p := (*[24]byte)(unsafe.Pointer(rla))[:]
