@@ -42,7 +42,7 @@ func buildSectionBodies(hasRelaText, hasRelaData, hasSymbols bool) []*section {
 
 type section struct {
 	sh_name    string
-	shndx      int
+	index      int
 	header     *ElfSectionHeader
 	numZeroPad uintptr
 	zeros      []uint8
@@ -77,9 +77,22 @@ func prepareSectionHeaderEntries(hasRelaText, hasRelaData, hasSymbols bool) []*s
 	}
 	r = append(r, s_shstrtab)
 	for i, s := range r {
-		s.shndx = i
+		s.index = i
 	}
-	s_rela_text.header.sh_link = uint32(s_symtab.shndx)
+
+	if hasSymbols {
+		s_symtab.header.sh_link = uint32(s_strtab.index) // @TODO confirm the reason to do this
+
+		if hasRelaText {
+			s_rela_text.header.sh_link = uint32(s_symtab.index)
+		}
+
+		if hasRelaData {
+			s_rela_data.header.sh_link = uint32(s_symtab.index)
+			s_rela_data.header.sh_info = uint32(s_data.index)
+		}
+	}
+
 	return r
 }
 
@@ -303,7 +316,7 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 			st_name:  0,
 			st_info:  STT_SECTION,
 			st_other: 0,
-			st_shndx: uint16(s_data.shndx),
+			st_shndx: uint16(s_data.index),
 			st_value: 0,
 			st_size:  0,
 		})
@@ -351,9 +364,9 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 			addr = sym.address
 			switch sym.section {
 			case ".text":
-				shndx = s_text.shndx
+				shndx = s_text.index
 			case ".data":
-				shndx = s_data.shndx
+				shndx = s_data.index
 			default:
 				panic("TBI")
 			}
@@ -388,6 +401,7 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 		//debugf("[buildSymbolTable] appended. index = %d, name = %s\n", index, symname)
 	}
 
+	s_symtab.header.sh_info = uint32(indexOfFirstNonLocalSymbol)
 
 	for _, entry := range symbolTable {
 		var buf []byte = ((*[24]byte)(unsafe.Pointer(entry)))[:]
@@ -583,13 +597,6 @@ func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataU
 	}
 	s_rela_data.contents = rela_data_c
 
-	s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
-	s_symtab.header.sh_info = uint32(indexOfFirstNonLocalSymbol)
-	if len(relaDataUsers) > 0 {
-		s_rela_data.header.sh_link = uint32(s_symtab.shndx)
-		s_rela_data.header.sh_info = uint32(s_data.shndx)
-	}
-
 	if len(relaTextUsers) > 0 {
 		var rela_text_c []byte
 
@@ -631,13 +638,6 @@ func buildRelaSections(relaTextUsers []*relaTextUser, relaDataUsers []*relaDataU
 			rela_text_c = append(rela_text_c, p...)
 		}
 		s_rela_text.contents = rela_text_c
-
-		//		s_symtab.header.sh_link = uint32(s_strtab.shndx) // @TODO confirm the reason to do this
-		//		sh_symtab.sh_info = uint32(indexOfFirstNonLocalSymbol)
-		//		if needRelaData {
-		//			s_rela_data.header.sh_link = uint32(s_symtab.shndx)
-		//			s_rela_data.header.sh_info = uint32(s_data.shndx)
-		//		}
 	}
 }
 
