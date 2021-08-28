@@ -273,13 +273,12 @@ func makeSectionNames(hasRelaText, hasRelaData, hasSymbols bool) []string {
 
 // Make contents of .shstrtab"
 func makeShStrTab(sectionNames []string) {
-	var data []byte = []byte{0x00}
+	buf := []byte{0x00}
 	for _, name := range sectionNames {
-		buf := []byte(name)
-		buf = append(buf, 0x00)
-		data = append(data, buf...)
+		buf = append(buf, name...)
+		buf = append(buf, 0)
 	}
-	s_shstrtab.contents = data
+	s_shstrtab.contents = buf
 }
 
 func resolveShNames(ss []*section) {
