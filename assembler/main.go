@@ -211,11 +211,6 @@ var s_strtab = &section{
 	},
 }
 
-// https://reviews.llvm.org/D28950
-// The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
-
-var indexOfFirstNonLocalSymbol int
-
 func calcOffsetOfSection(s *section, prev *section) {
 	tentative_offset := prev.header.sh_offset + prev.header.sh_size
 	var align = s.header.sh_addralign
@@ -354,6 +349,10 @@ func buildSymbolTable(hasRelaData bool, globalSymbols map[string]bool) {
 	//debugf("allSymbolsForElf=%v\n", allSymbolsForElf)
 	s_strtab.contents = makeStrTab(allSymbolsForElf)
 	//panic(len(allSymbolsForElf))
+
+	// https://reviews.llvm.org/D28950
+	// The sh_info field of the SHT_SYMTAB section holds the index for the first non-local symbol.
+	var indexOfFirstNonLocalSymbol int
 
 	for _, symname := range allSymbolsForElf {
 		isGlobal := globalSymbols[symname]
