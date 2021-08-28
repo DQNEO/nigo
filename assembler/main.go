@@ -98,7 +98,6 @@ var s_text = &section{
 		sh_addralign: 0x01,
 		sh_entsize:   0,
 	},
-	contents: nil,
 }
 
 var s_rela_text = &section{
@@ -111,7 +110,6 @@ var s_rela_text = &section{
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
 	},
-	contents: nil,
 }
 
 // ".rela.data"
@@ -124,7 +122,6 @@ var s_rela_data = &section{
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
 	},
-	contents: nil,
 }
 
 var s_data = &section{
@@ -138,7 +135,6 @@ var s_data = &section{
 		sh_addralign: 0x01,
 		sh_entsize:   0,
 	},
-	contents: nil,
 }
 
 var s_bss = &section{
@@ -152,7 +148,6 @@ var s_bss = &section{
 		sh_addralign: 0x01,
 		sh_entsize:   0,
 	},
-	contents: nil,
 }
 
 //  ".symtab"
@@ -167,7 +162,6 @@ var s_symtab = &section{
 		sh_addralign: 0x08,
 		sh_entsize:   0x18,
 	},
-	contents: nil,
 }
 
 var s_shstrtab = &section{
@@ -202,7 +196,6 @@ var s_strtab = &section{
 		sh_addralign: 0x01,
 		sh_entsize:   0,
 	},
-	contents: nil,
 }
 
 // https://reviews.llvm.org/D28950
