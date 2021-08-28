@@ -440,16 +440,6 @@ func assert(bol bool, errorMsg string) {
 	}
 }
 
-/*
-var addresses = map[string]uintptr{
-	"myGlobalInt": 0x0,
-	"pGlobalInt": 0x08,
-	"myfunc": 0x30,
-	"myfunc2": 0x31,
-	"_start": 0,
-}
-*/
-var currentTextAddr uintptr
 
 func dumpText(code []byte) string {
 	var r []string = make([]string, len(code))
@@ -463,22 +453,23 @@ var debugEncoder bool = false
 
 func encodeAllText(ss []*statement) []byte {
 	var allText []byte
+	var textAddr uintptr
 	for _, s := range ss {
 		if s.labelSymbol == "" && s.keySymbol == "" {
 			continue
 		}
-		textAddr := currentTextAddr
-		instr := encode(s)
+		tmpAddr := textAddr
+		instr := encode(s, textAddr)
 		buf := instr.code
-		currentTextAddr += uintptr(len(buf))
+		textAddr += uintptr(len(buf))
 		if debugEncoder {
-			debugf("[encoder] %04x : %s\t=>\t%s\n", textAddr, s.raw, dumpText(buf))
+			debugf("[encoder] %04x : %s\t=>\t%s\n", tmpAddr, s.raw, dumpText(buf))
 		}
 		allText = append(allText, buf...)
 	}
 
 	//debugf("iterating unresolvedCodeSymbols...\n")
-	for codeAddr, replaceInfo := range unresolvedCodeSymbols {
+	for addr, replaceInfo := range unresolvedCodeSymbols {
 		sym, ok := definedSymbols[replaceInfo.symbolUsed]
 		if !ok {
 			//debugf("  symbol not found: %s\n" , replaceInfo.symbolUsed)
@@ -490,7 +481,7 @@ func encodeAllText(ss []*statement) []byte {
 			}
 			//debugf("  patching symol addr into code : %s=%02x => %02x (%02x - %02x)\n",
 			//	sym.name, codeAddr, diff, sym.address , replaceInfo.nextInstrAddr)
-			allText[codeAddr] = byte(diff) // @FIXME diff can be larget than a byte
+			allText[addr] = byte(diff) // @FIXME diff can be larget than a byte
 		}
 	}
 	return allText

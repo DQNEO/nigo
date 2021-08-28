@@ -99,15 +99,15 @@ type Instruction struct {
 	code      []byte
 }
 
-func encode(s *statement) *Instruction {
+func encode(s *statement, instrAddr uintptr) *Instruction {
 	//debugf("stmt=%#v\n", s)
 	var r []byte
 	var instr = &Instruction{
-		startAddr: currentTextAddr,
+		startAddr: instrAddr,
 		raw:       s,
 	}
 	if s.labelSymbol != "" {
-		definedSymbols[s.labelSymbol].address = currentTextAddr
+		definedSymbols[s.labelSymbol].address = instrAddr
 	}
 
 	if s.labelSymbol != "" && s.keySymbol == "" {
@@ -124,8 +124,8 @@ func encode(s *statement) *Instruction {
 		target_symbol := s.operands[0].ifc.(*symbolExpr).name
 		r = []byte{0xeb}
 		r = append(r, 0)
-		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
-			nextInstrAddr: currentTextAddr + uintptr(len(r)),
+		unresolvedCodeSymbols[instrAddr+1] = &addrToReplace{
+			nextInstrAddr: instrAddr + uintptr(len(r)),
 			symbolUsed:    target_symbol,
 		}
 	case "callq", "call":
@@ -133,16 +133,16 @@ func encode(s *statement) *Instruction {
 
 		r = []byte{0xe8}
 		ru := &relaTextUser{
-			addr: currentTextAddr + uintptr(len(r)) ,
-			uses: target_symbol,
+			addr:   instrAddr + uintptr(len(r)) ,
+			uses:   target_symbol,
 			toJump: true,
 		}
 		relaTextUsers = append(relaTextUsers, ru)
 
 		r = append(r,  0, 0, 0, 0)
 
-		unresolvedCodeSymbols[currentTextAddr+1] = &addrToReplace{
-			nextInstrAddr: currentTextAddr + uintptr(len(r) ),
+		unresolvedCodeSymbols[instrAddr+1] = &addrToReplace{
+			nextInstrAddr: instrAddr + uintptr(len(r) ),
 			symbolUsed:    target_symbol,
 		}
 	case "leaq":
@@ -231,8 +231,8 @@ func encode(s *statement) *Instruction {
 						if _, defined := definedSymbols[symbol]; !defined {
 							// @TODO shouud use expr.right.(*numberExpr).val as an offset
 							ru := &relaTextUser{
-								addr: currentTextAddr + uintptr(len(r)),
-								uses: symbol,
+								addr:   instrAddr + uintptr(len(r)),
+								uses:   symbol,
 								adjust: int64(evalNumExpr(expr.right)),
 							}
 							relaTextUsers = append(relaTextUsers, ru)
@@ -273,7 +273,7 @@ func encode(s *statement) *Instruction {
 
 				symbol := op1.expr.(*symbolExpr).name
 				ru := &relaTextUser{
-					addr: currentTextAddr + uintptr(len(r)),
+					addr: instrAddr + uintptr(len(r)),
 					uses: symbol,
 				}
 
